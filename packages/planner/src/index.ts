@@ -5,6 +5,8 @@ import { getDemoPlan } from './demo.js';
 export async function generatePlan(goal: string): Promise<Plan> {
   // Support both LLM_API_KEY and GITHUB_TOKEN for GitHub Models
   const apiKey = process.env.LLM_API_KEY || process.env.GITHUB_TOKEN;
+  // GitHub Models uses provider-prefixed format (e.g., 'openai/gpt-4o-mini')
+  // For standard OpenAI, use just the model name (e.g., 'gpt-4o-mini')
   const model = process.env.LLM_MODEL || 'openai/gpt-4o-mini';
   const baseURL = process.env.LLM_BASE_URL || 'https://models.github.ai/inference';
 
