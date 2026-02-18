@@ -98,12 +98,12 @@ function EventCard({ event }: EventCardProps) {
         <span className="event-time">{time}</span>
       </div>
       {event.stepId && <div className="event-step">Step: {event.stepId}</div>}
-      {event.data && (
+      {event.data ? (
         <details className="event-data">
           <summary>Data</summary>
           <pre>{JSON.stringify(event.data, null, 2)}</pre>
         </details>
-      ) as any}
+      ) : null}
     </div>
   );
 }

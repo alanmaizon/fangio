@@ -44,5 +44,8 @@ export async function eventsRoute(fastify: FastifyInstance) {
     request.raw.on('close', () => {
       clearInterval(keepAlive);
     });
+
+    // SSE connections remain open, no explicit return needed
+    return reply;
   });
 }
