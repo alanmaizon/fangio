@@ -1,0 +1,19 @@
+{
+  "name": "fangio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Trusted Agent Runtime - Plan → Approve → Execute → Replay",
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter @fangio/api dev\" \"pnpm --filter @fangio/web dev\"",
+    "build": "pnpm --filter @fangio/schema build && pnpm --filter @fangio/tools build && pnpm --filter @fangio/planner build && pnpm --filter @fangio/api build && pnpm --filter @fangio/web build",
+    "lint": "pnpm --filter \"./packages/**\" lint && pnpm --filter \"./apps/**\" lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
