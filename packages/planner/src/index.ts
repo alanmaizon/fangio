@@ -3,15 +3,18 @@ import { createSystemPrompt } from './prompt.js';
 import { getDemoPlan } from './demo.js';
 
 export async function generatePlan(goal: string): Promise<Plan> {
-  const apiKey = process.env.LLM_API_KEY;
-  const model = process.env.LLM_MODEL || 'gpt-4o-mini';
-  const baseURL = process.env.LLM_BASE_URL || 'https://api.openai.com/v1';
+  // Support both LLM_API_KEY and GITHUB_TOKEN for GitHub Models
+  const apiKey = process.env.LLM_API_KEY || process.env.GITHUB_TOKEN;
+  const model = process.env.LLM_MODEL || 'openai/gpt-4o-mini';
+  const baseURL = process.env.LLM_BASE_URL || 'https://models.github.ai/inference';
 
-  // If no API key, use demo mode
+  // If no API key and no GitHub token, use demo mode
   if (!apiKey) {
-    console.log('No LLM_API_KEY found, using demo mode');
+    console.log('No LLM_API_KEY or GITHUB_TOKEN found, using demo mode');
     return getDemoPlan(goal);
   }
+
+  console.log(`Using LLM provider: ${baseURL} (model: ${model})`);
 
   // Try to call the LLM
   try {

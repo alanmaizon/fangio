@@ -6,6 +6,7 @@ import { approveRoute } from './routes/approve.js';
 import { executeRoute } from './routes/execute.js';
 import { eventsRoute } from './routes/events.js';
 import { replayRoute } from './routes/replay.js';
+import { statusRoute } from './routes/status.js';
 
 // Load environment variables
 config();
@@ -29,6 +30,7 @@ await approveRoute(fastify);
 await executeRoute(fastify);
 await eventsRoute(fastify);
 await replayRoute(fastify);
+await statusRoute(fastify);
 
 // Health check endpoint
 fastify.get('/health', async () => {

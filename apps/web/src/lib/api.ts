@@ -96,3 +96,12 @@ export async function getReplay(planId: string): Promise<{ events: AuditEvent[] 
 
   return response.json();
 }
+
+export async function getStatus(): Promise<{
+  mode: 'live' | 'demo';
+  provider: string;
+  model: string;
+}> {
+  const res = await fetch(`${API_BASE_URL}/api/status`);
+  return res.json();
+}
