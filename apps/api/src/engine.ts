@@ -1,4 +1,3 @@
-import type { Plan } from '@fangio/schema';
 import { executeTool } from '@fangio/tools';
 import { getPlan, emitEvent, persistRun } from './store.js';
 

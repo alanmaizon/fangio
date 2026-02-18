@@ -40,7 +40,7 @@ export async function generatePlan(goal: string): Promise<Plan> {
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = (data as any).choices?.[0]?.message?.content;
 
     if (!content) {
       console.error('No content in LLM response');

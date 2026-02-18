@@ -15,14 +15,16 @@ export function TimelinePanel({ planId }: TimelinePanelProps) {
       return;
     }
 
-    const { subscribeEvents } = require('../lib/api');
-    const unsubscribe = subscribeEvents(planId, (event: AuditEvent) => {
-      setEvents((prev) => [...prev, event]);
-    });
+    // Dynamic import to avoid issues at build time
+    import('../lib/api').then(({ subscribeEvents }) => {
+      const unsubscribe = subscribeEvents(planId, (event: AuditEvent) => {
+        setEvents((prev) => [...prev, event]);
+      });
 
-    return () => {
-      unsubscribe();
-    };
+      return () => {
+        unsubscribe();
+      };
+    });
   }, [planId]);
 
   const handleReplay = async () => {
@@ -101,7 +103,7 @@ function EventCard({ event }: EventCardProps) {
           <summary>Data</summary>
           <pre>{JSON.stringify(event.data, null, 2)}</pre>
         </details>
-      )}
+      ) as any}
     </div>
   );
 }

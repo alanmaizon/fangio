@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { getEvents, addListener, removeListener } from '../store.js';
 import type { AuditEvent } from '@fangio/schema';
 

@@ -9,7 +9,7 @@ export const dockerPsTool = {
   description: 'List all running Docker containers',
   risk: 'low' as RiskLevel,
   argsSchema: dockerPsArgsSchema,
-  execute: async (args: z.infer<typeof dockerPsArgsSchema>) => {
+  execute: async (_args: z.infer<typeof dockerPsArgsSchema>) => {
     const result = await execa('docker', ['ps', '--format', 'json']);
     return {
       stdout: result.stdout,
@@ -25,7 +25,7 @@ export const dockerStatsTool = {
   description: 'Get resource usage statistics for all running containers',
   risk: 'low' as RiskLevel,
   argsSchema: dockerStatsArgsSchema,
-  execute: async (args: z.infer<typeof dockerStatsArgsSchema>) => {
+  execute: async (_args: z.infer<typeof dockerStatsArgsSchema>) => {
     const result = await execa('docker', ['stats', '--no-stream', '--format', 'json']);
     return {
       stdout: result.stdout,
