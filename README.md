@@ -431,6 +431,14 @@ Instead, it treats agents as **production infrastructure** that must be observab
 
 ---
 
+## Comparisons
+
+See how Fangio compares to other agent platforms:
+
+- [Fangio vs Amazon Bedrock AgentCore](docs/comparison-bedrock-agentcore.md)
+
+---
+
 ## Future Directions
 
 * sandboxed tool execution
