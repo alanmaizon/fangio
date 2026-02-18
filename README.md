@@ -211,7 +211,7 @@ pnpm dev
 API:
 
 ```
-http://localhost:8787
+http://localhost:3001
 ```
 
 Web UI:
@@ -237,6 +237,141 @@ LLM_API_KEY=your_key_here
 ### Demo Mode
 
 If no key is present, Fangio falls back to deterministic canned plans — ensuring reliable demos even offline.
+
+---
+
+## API Reference
+
+### POST /api/plan
+
+Create a new execution plan from a user goal.
+
+**Request:**
+```json
+{
+  "goal": "Diagnose why my dockerized API is slow"
+}
+```
+
+**Response:**
+```json
+{
+  "planId": "plan-1234567890",
+  "plan": {
+    "planId": "plan-1234567890",
+    "goal": "Diagnose why my dockerized API is slow",
+    "steps": [
+      {
+        "id": "step-1",
+        "tool": "docker.ps",
+        "args": {},
+        "risk": "low",
+        "description": "List all running containers",
+        "approved": true
+      }
+    ],
+    "createdAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### POST /api/approve
+
+Approve medium/high-risk steps before execution.
+
+**Request:**
+```json
+{
+  "planId": "plan-1234567890",
+  "stepIds": ["step-2", "step-3"]
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true
+}
+```
+
+### POST /api/execute
+
+Execute an approved plan.
+
+**Request:**
+```json
+{
+  "planId": "plan-1234567890"
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true
+}
+```
+
+Returns 400 if not all steps are approved.
+
+### GET /api/events?planId=...
+
+Server-Sent Events (SSE) stream of execution events.
+
+**Stream Format:**
+```
+data: {"planId":"plan-123","type":"step.started","stepId":"step-1","timestamp":"2024-01-01T00:00:00.000Z"}
+
+data: {"planId":"plan-123","type":"step.output","stepId":"step-1","data":{"stdout":"..."},"timestamp":"2024-01-01T00:00:01.000Z"}
+```
+
+**Event Types:**
+- `plan.created` - Plan was created
+- `step.approved` - Step was approved
+- `step.started` - Step execution started
+- `step.output` - Step produced output
+- `step.error` - Step encountered an error
+- `step.finished` - Step execution finished
+- `execution.finished` - All steps completed
+
+### GET /api/replay?planId=...
+
+Get the complete event log for a plan (for replay).
+
+**Response:**
+```json
+{
+  "events": [
+    {
+      "planId": "plan-123",
+      "type": "plan.created",
+      "timestamp": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+## Tool Catalog
+
+All available tools with their risk classifications:
+
+| Tool | Risk | Description | Arguments |
+|------|------|-------------|-----------|
+| `docker.ps` | low | List all running Docker containers | None |
+| `docker.stats` | low | Get resource usage statistics for containers | None |
+| `docker.logs` | low | Get the last 100 lines of container logs | `container` (string) |
+| `docker.restart` | medium | Restart a Docker container | `container` (string) |
+| `git.status` | low | Get Git repository status | None |
+| `filesystem.search` | low | Search for files matching a pattern | `path` (string), `pattern` (string) |
+| `http.probe` | low | Probe an HTTP endpoint for status and response time | `url` (string) |
+
+### Risk Policy
+
+- **Low risk** - Auto-approved, executed immediately
+- **Medium risk** - Requires explicit approval before execution
+- **High risk** - Blocked unless explicitly approved (not currently in catalog)
 
 ---
 
