@@ -222,6 +222,50 @@ http://localhost:5173
 
 ---
 
+## Using GitHub Models
+
+Fangio uses [GitHub Models](https://github.com/marketplace/models) as its default LLM provider. This means you can power Fangio with AI models directly from GitHub — no separate API key needed!
+
+### Setup
+
+1. **Create a GitHub Personal Access Token** at [github.com/settings/tokens](https://github.com/settings/tokens)
+2. **Set it in your `.env` file:**
+
+```
+GITHUB_TOKEN=ghp_your_token_here
+```
+
+3. **That's it!** Fangio will automatically use GitHub Models at `https://models.github.ai/inference`
+
+### Switching Models
+
+You can use any model available in [GitHub Models](https://github.com/marketplace/models):
+
+```
+LLM_MODEL=openai/gpt-4o-mini      # Default - fast and cost-effective
+LLM_MODEL=openai/gpt-4o           # More capable
+```
+
+### Testing Prompts in the Playground
+
+This repository includes `.prompt.md` files in `.github/prompts/` that you can test directly in the GitHub Models playground:
+
+1. Enable **Models** on this repository (Settings → Models → Enabled)
+2. Go to the **Models** tab
+3. Select a prompt file and experiment with different models
+
+### Using Other Providers
+
+Fangio works with any OpenAI-compatible API. To use a different provider:
+
+```
+LLM_API_KEY=sk-your-key
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-4o-mini
+```
+
+---
+
 ## API Key (Optional)
 
 Fangio supports two modes:
