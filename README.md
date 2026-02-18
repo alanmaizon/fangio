@@ -1,95 +1,275 @@
-# pellegrino
-ERD for a travel agency
-```mermaid
-erDiagram
-    CUSTOMER {
-        int id PK
-        string name
-        string email
-        string phone
-        string address
-        datetime created_at
-    }
+# Fangio 🏁  
+**A Trusted Runtime for Autonomous Agents**
 
-    FLIGHT {
-        int id PK
-        string airline
-        string flight_number
-        string origin
-        string destination
-        datetime departure_time
-        datetime arrival_time
-        float price
-        int available_seats
-    }
+> Plan → Approve → Execute → Replay
 
-    HOTEL {
-        int id PK
-        string name
-        string location
-        float price_per_night
-        int available_rooms
-    }
+Fangio is a local-first runtime that makes AI agent actions **observable, governable, and replayable** — turning agent behavior into something developers can actually trust.
 
-    TOUR {
-        int id PK
-        string name
-        string destination
-        datetime start_date
-        datetime end_date
-        float price
-        int available_spots
-    }
+As agents become capable of executing real system tasks, the industry is rapidly shifting from:
 
-    BOOKING {
-        int id PK
-        int customer_id FK
-        int flight_id FK
-        int hotel_id FK
-        int tour_id FK
-        datetime booking_date
-        string status
-        float total_price
-    }
+👉 *“Can agents act?”*  
+to  
+👉 *“Can agents be trusted?”*
 
-    EMPLOYEE {
-        int id PK
-        string name
-        string email
-        string role
-    }
+Fangio answers that question.
 
-    INVENTORY_UPDATE {
-        int id PK
-        int employee_id FK
-        int flight_id FK
-        int hotel_id FK
-        int tour_id FK
-        string update_type
-        datetime update_time
-        float new_price
-    }
+---
 
-    MANAGER {
-        int id PK
-        string name
-        string email
-    }
+## Why Fangio?
 
-    REPORT {
-        int id PK
-        int manager_id FK
-        datetime report_date
-        string report_type
-        text content
-    }
+Today, most agent frameworks optimize for autonomy.
 
-    CUSTOMER ||--o{ BOOKING : "makes"
-    FLIGHT ||--o{ BOOKING : "part of"
-    HOTEL ||--o{ BOOKING : "part of"
-    TOUR ||--o{ BOOKING : "part of"
-    EMPLOYEE ||--o{ INVENTORY_UPDATE : "makes"
-    INVENTORY_UPDATE ||--o{ FLIGHT : "updates"
-    INVENTORY_UPDATE ||--o{ HOTEL : "updates"
-    INVENTORY_UPDATE ||--o{ TOUR : "updates"
-    MANAGER ||--o{ REPORT : "generates"
+Few optimize for:
+
+- execution safety  
+- auditability  
+- deterministic replay  
+- human approval  
+- capability governance  
+
+Fangio introduces a runtime layer that enforces these properties by design.
+
+**The model plans.  
+The runtime decides.**
+
+---
+
+## Core Principles
+
+### Local-First
+Tool execution happens on the user’s machine.
+
+Sensitive artifacts — logs, filesystem data, repo contents — never leave the runtime.
+
+### Zero Trust Toward the Model
+LLMs are treated as planners, not operators.
+
+Every generated plan is:
+
+- schema validated  
+- tool-restricted  
+- risk classified  
+- approval gated  
+
+### Deterministic Execution
+Each run produces a complete audit timeline that can be replayed without calling the model again.
+
+---
+
+## How It Works
+
+```
+
+User Goal
+↓
+Planner (LLM)
+↓
+Structured Plan (JSON)
+↓
+Runtime Validation (zod)
+↓
+Approval Gate
+↓
+Tool Execution
+↓
+Audit Event Stream
+↓
+Replay Timeline
+
+```
+
+---
+
+## Features
+
+### Structured Planning
+Agents must output strict JSON — no free-form reasoning controlling execution.
+
+### Capability Registry
+Tools are explicitly registered and risk-tiered.
+
+Example:
+
+| Tool | Risk |
+|------|--------|
+| docker.ps | low |
+| http.probe | low |
+| filesystem.search | low |
+| docker.restart | medium |
+| shell.run | high |
+
+High-risk tools are blocked unless explicitly approved.
+
+---
+
+### Approval Before Action
+Fangio surfaces agent intent **before execution**, enabling human-in-the-loop governance.
+
+Example:
+
+```
+
+Restart container "api-prod"
+Risk: Medium
+Reason: Memory usage sustained at 96%
+
+```
+
+---
+
+### Live Execution Timeline
+Every step emits structured events:
+
+- plan created  
+- step approved  
+- tool started  
+- output received  
+- step completed  
+
+This creates full operational transparency.
+
+---
+
+### Replay Mode
+Runs are persisted and can be replayed deterministically — no model required.
+
+This introduces auditability typically missing from agent systems.
+
+---
+
+## Architecture
+
+```
+
+fangio/
+├── apps/
+│   ├── api        → Fastify agent runtime
+│   └── web        → React dashboard
+│
+├── packages/
+│   ├── schema     → zod safety contracts
+│   ├── tools      → capability registry
+│   └── planner    → LLM boundary
+│
+└── runs/          → persisted audit logs
+
+````
+
+### Stack
+
+- **Full TypeScript**
+- Fastify
+- React + Vite
+- zod
+- execa
+- Server-Sent Events (SSE)
+
+No database required — Fangio is intentionally lightweight and local-first.
+
+---
+
+## Demo Scenario
+
+**Goal:**  
+Diagnose why a dockerized API is slow.
+
+Fangio will:
+
+✅ generate a structured diagnostic plan  
+✅ classify tool risk  
+✅ request approval for remediation  
+✅ execute tools locally  
+✅ stream outputs  
+✅ persist the run  
+✅ replay the timeline  
+
+---
+
+## Running Locally
+
+### Requirements
+- Node 18+
+- pnpm
+- Docker (optional but recommended)
+
+---
+
+### Install
+
+```bash
+pnpm install
+````
+
+---
+
+### Start
+
+```bash
+pnpm dev
+```
+
+API:
+
+```
+http://localhost:8787
+```
+
+Web UI:
+
+```
+http://localhost:5173
+```
+
+---
+
+## API Key (Optional)
+
+Fangio supports two modes:
+
+### Smart Mode
+
+Uses an LLM to generate plans.
+
+```
+LLM_API_KEY=your_key_here
+```
+
+### Demo Mode
+
+If no key is present, Fangio falls back to deterministic canned plans — ensuring reliable demos even offline.
+
+---
+
+## Design Philosophy
+
+Fangio is intentionally **not**:
+
+* another chatbot
+* an autonomous black box
+* a prompt wrapper
+
+Instead, it treats agents as **production infrastructure** that must be observable and controllable.
+
+---
+
+## Future Directions
+
+* sandboxed tool execution
+* policy engines
+* multi-agent governance
+* cryptographic execution signatures
+* SOC2-aligned audit trails
+
+---
+
+## Inspiration
+
+Named after **Juan Manuel Fangio**, one of the most precise drivers in Formula 1 history, this project reflects the same philosophy:
+
+> Power is meaningless without control.
+
+---
+
+## License
+
+MIT
