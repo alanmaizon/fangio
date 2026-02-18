@@ -6,11 +6,13 @@
   "scripts": {
     "dev": "concurrently \"pnpm --filter @fangio/api dev\" \"pnpm --filter @fangio/web dev\"",
     "build": "pnpm --filter @fangio/schema build && pnpm --filter @fangio/tools build && pnpm --filter @fangio/planner build && pnpm --filter @fangio/api build && pnpm --filter @fangio/web build",
-    "lint": "pnpm --filter \"./packages/**\" lint && pnpm --filter \"./apps/**\" lint"
+    "lint": "pnpm --filter \"./packages/**\" lint && pnpm --filter \"./apps/**\" lint",
+    "test": "vitest run"
   },
   "devDependencies": {
+    "concurrently": "^8.2.2",
     "typescript": "^5.3.3",
-    "concurrently": "^8.2.2"
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=18.0.0",
