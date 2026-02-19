@@ -12,6 +12,7 @@ export const PlanStepSchema = z.object({
   risk: RiskLevelSchema,
   description: z.string(),
   approved: z.boolean().default(false),
+  approvedAt: z.string().optional(),
 });
 export type PlanStep = z.infer<typeof PlanStepSchema>;
 

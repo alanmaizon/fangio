@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { execa } from 'execa';
 import type { RiskLevel } from '@fangio/schema';
+import { runCommand } from './command.js';
 
 // HTTP tools
 export const httpProbeArgsSchema = z.object({
@@ -14,7 +14,7 @@ export const httpProbeTool = {
   execute: async (args: z.infer<typeof httpProbeArgsSchema>) => {
     // Validate args
     const validated = httpProbeArgsSchema.parse(args);
-    const result = await execa('curl', [
+    const result = await runCommand('curl', [
       '-s',
       '-o',
       '/dev/null',

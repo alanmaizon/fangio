@@ -14,6 +14,7 @@ export interface PlanStep {
   risk: 'low' | 'medium' | 'high';
   description: string;
   approved: boolean;
+  approvedAt?: string;
 }
 
 export interface AuditEvent {

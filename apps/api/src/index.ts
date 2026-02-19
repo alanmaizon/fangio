@@ -1,41 +1,11 @@
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
 import { config } from 'dotenv';
-import { planRoute } from './routes/plan.js';
-import { approveRoute } from './routes/approve.js';
-import { executeRoute } from './routes/execute.js';
-import { eventsRoute } from './routes/events.js';
-import { replayRoute } from './routes/replay.js';
-import { statusRoute } from './routes/status.js';
+import { buildApp } from './app.js';
 
 // Load environment variables
 config();
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
-
-// Create Fastify instance
-const fastify = Fastify({
-  logger: true,
-});
-
-// Enable CORS for local development
-await fastify.register(cors, {
-  origin: true,
-  credentials: true,
-});
-
-// Register routes
-await planRoute(fastify);
-await approveRoute(fastify);
-await executeRoute(fastify);
-await eventsRoute(fastify);
-await replayRoute(fastify);
-await statusRoute(fastify);
-
-// Health check endpoint
-fastify.get('/health', async () => {
-  return { status: 'ok' };
-});
+const fastify = await buildApp({ logger: true });
 
 // Start server
 try {

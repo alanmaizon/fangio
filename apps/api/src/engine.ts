@@ -1,8 +1,8 @@
 import { executeTool } from '@fangio/tools';
-import { getPlan, emitEvent, persistRun } from './store.js';
+import { getPlanOrLoad, emitEvent, persistRun } from './store.js';
 
 export async function executePlan(planId: string): Promise<void> {
-  const plan = getPlan(planId);
+  const plan = await getPlanOrLoad(planId);
   if (!plan) {
     throw new Error(`Plan ${planId} not found`);
   }

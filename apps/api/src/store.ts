@@ -1,21 +1,43 @@
-import type { Plan, AuditEvent } from '@fangio/schema';
+import { type Plan, type AuditEvent, PlanSchema, AuditEventSchema } from '@fangio/schema';
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // In-memory storage
 const plans = new Map<string, Plan>();
 const events = new Map<string, AuditEvent[]>();
 const listeners = new Map<string, Set<(event: AuditEvent) => void>>();
 
+function getDataDir(): string {
+  return process.env.FANGIO_DATA_DIR || join(process.cwd(), '.fangio');
+}
+
+function getPlansDir(): string {
+  return join(getDataDir(), 'plans');
+}
+
+function getRunsDir(): string {
+  return join(getDataDir(), 'runs');
+}
+
+async function persistPlan(plan: Plan): Promise<void> {
+  const plansDir = getPlansDir();
+  const filePath = join(plansDir, `${plan.planId}.json`);
+  await fs.mkdir(plansDir, { recursive: true });
+  await fs.writeFile(filePath, JSON.stringify(plan, null, 2), 'utf-8');
+}
+
 // Store a plan
-export function storePlan(plan: Plan): void {
+export async function storePlan(plan: Plan): Promise<void> {
   plans.set(plan.planId, plan);
-  events.set(plan.planId, []);
+  if (!events.has(plan.planId)) {
+    events.set(plan.planId, []);
+  }
+
+  try {
+    await persistPlan(plan);
+  } catch (error) {
+    console.error(`Failed to persist plan ${plan.planId}:`, error);
+  }
 }
 
 // Get a plan
@@ -23,9 +45,34 @@ export function getPlan(planId: string): Plan | undefined {
   return plans.get(planId);
 }
 
+export async function getPlanOrLoad(planId: string): Promise<Plan | undefined> {
+  const existingPlan = plans.get(planId);
+  if (existingPlan) {
+    return existingPlan;
+  }
+
+  const loadedPlan = await loadPlan(planId);
+  if (!loadedPlan) {
+    return undefined;
+  }
+
+  plans.set(planId, loadedPlan);
+  if (!events.has(planId)) {
+    events.set(planId, []);
+  }
+
+  return loadedPlan;
+}
+
 // Update a plan
-export function updatePlan(plan: Plan): void {
+export async function updatePlan(plan: Plan): Promise<void> {
   plans.set(plan.planId, plan);
+
+  try {
+    await persistPlan(plan);
+  } catch (error) {
+    console.error(`Failed to update persisted plan ${plan.planId}:`, error);
+  }
 }
 
 // Emit an event
@@ -74,7 +121,7 @@ export async function persistRun(planId: string): Promise<void> {
     return;
   }
 
-  const runsDir = join(__dirname, 'runs');
+  const runsDir = getRunsDir();
   const filePath = join(runsDir, `${planId}.json`);
 
   try {
@@ -85,15 +132,36 @@ export async function persistRun(planId: string): Promise<void> {
   }
 }
 
+// Load a plan from disk
+export async function loadPlan(planId: string): Promise<Plan | null> {
+  const plansDir = getPlansDir();
+  const filePath = join(plansDir, `${planId}.json`);
+
+  try {
+    const data = await fs.readFile(filePath, 'utf-8');
+    return PlanSchema.parse(JSON.parse(data));
+  } catch (_error) {
+    return null;
+  }
+}
+
 // Load a run from disk
 export async function loadRun(planId: string): Promise<AuditEvent[] | null> {
-  const runsDir = join(__dirname, 'runs');
+  const runsDir = getRunsDir();
   const filePath = join(runsDir, `${planId}.json`);
 
   try {
     const data = await fs.readFile(filePath, 'utf-8');
-    return JSON.parse(data);
-  } catch (error) {
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed.map((item) => AuditEventSchema.parse(item)) : null;
+  } catch (_error) {
     return null;
   }
+}
+
+// Test helper: clear in-memory state
+export function resetStore(): void {
+  plans.clear();
+  events.clear();
+  listeners.clear();
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { execa } from 'execa';
 import type { RiskLevel } from '@fangio/schema';
+import { runCommand } from './command.js';
 
 // Docker tools
 export const dockerPsArgsSchema = z.object({});
@@ -10,7 +10,7 @@ export const dockerPsTool = {
   risk: 'low' as RiskLevel,
   argsSchema: dockerPsArgsSchema,
   execute: async (_args: z.infer<typeof dockerPsArgsSchema>) => {
-    const result = await execa('docker', ['ps', '--format', 'json']);
+    const result = await runCommand('docker', ['ps', '--format', 'json']);
     return {
       stdout: result.stdout,
       stderr: result.stderr,
@@ -26,7 +26,7 @@ export const dockerStatsTool = {
   risk: 'low' as RiskLevel,
   argsSchema: dockerStatsArgsSchema,
   execute: async (_args: z.infer<typeof dockerStatsArgsSchema>) => {
-    const result = await execa('docker', ['stats', '--no-stream', '--format', 'json']);
+    const result = await runCommand('docker', ['stats', '--no-stream', '--format', 'json']);
     return {
       stdout: result.stdout,
       stderr: result.stderr,
@@ -46,7 +46,7 @@ export const dockerLogsTool = {
   execute: async (args: z.infer<typeof dockerLogsArgsSchema>) => {
     // Validate args
     const validated = dockerLogsArgsSchema.parse(args);
-    const result = await execa('docker', ['logs', '--tail', '100', validated.container]);
+    const result = await runCommand('docker', ['logs', '--tail', '100', validated.container]);
     return {
       stdout: result.stdout,
       stderr: result.stderr,
@@ -66,7 +66,7 @@ export const dockerRestartTool = {
   execute: async (args: z.infer<typeof dockerRestartArgsSchema>) => {
     // Validate args
     const validated = dockerRestartArgsSchema.parse(args);
-    const result = await execa('docker', ['restart', validated.container]);
+    const result = await runCommand('docker', ['restart', validated.container]);
     return {
       stdout: result.stdout,
       stderr: result.stderr,

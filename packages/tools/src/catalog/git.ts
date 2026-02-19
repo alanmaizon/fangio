@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { execa } from 'execa';
 import type { RiskLevel } from '@fangio/schema';
+import { runCommand } from './command.js';
 
 // Git tools
 export const gitStatusArgsSchema = z.object({});
@@ -10,7 +10,7 @@ export const gitStatusTool = {
   risk: 'low' as RiskLevel,
   argsSchema: gitStatusArgsSchema,
   execute: async (_args: z.infer<typeof gitStatusArgsSchema>) => {
-    const result = await execa('git', ['status', '--porcelain']);
+    const result = await runCommand('git', ['status', '--porcelain']);
     return {
       stdout: result.stdout,
       stderr: result.stderr,
