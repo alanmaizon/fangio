@@ -1,5 +1,11 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@fangio/schema": ["packages/schema/src/index.ts"],
+      "@fangio/tools": ["packages/tools/src/index.ts"],
+      "@fangio/planner": ["packages/planner/src/index.ts"]
+    },
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",

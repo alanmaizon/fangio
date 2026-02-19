@@ -1,0 +1,25 @@
+{
+  "channelBaseline": "playground",
+  "channels": {
+    "playground": {
+      "enabled": true,
+      "tools": ["git.status", "http.probe", "filesystem.search"]
+    },
+    "activity_protocol": {
+      "enabled": true,
+      "tools": ["git.status", "http.probe", "filesystem.search"]
+    },
+    "copilot_studio": {
+      "enabled": true,
+      "tools": ["git.status", "http.probe", "filesystem.search"]
+    }
+  },
+  "mcp": [
+    {
+      "name": "microsoft-learn",
+      "url": "https://example.com/mcp"
+    }
+  ],
+  "expectedTraceFields": ["traceId", "channel", "responseId"],
+  "regionRiskDenylist": ["westeurope"]
+}

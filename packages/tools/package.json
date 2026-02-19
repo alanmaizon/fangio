@@ -13,7 +13,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "lint": "tsc --noEmit"
+    "lint": "tsc -b --pretty false"
   },
   "dependencies": {
     "@fangio/schema": "workspace:*",

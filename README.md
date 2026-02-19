@@ -222,6 +222,35 @@ http://localhost:5173
 
 ---
 
+## Foundry Adoption Doctor
+
+Fangio includes a validator to spot high-risk adoption gaps before production rollout:
+
+- channel parity drift (playground vs activity protocol vs Copilot Studio)
+- MCP schema drift (`custom_MCP` vs `mcp`)
+- region/network readiness risks
+- trace correlation field completeness in replay logs
+
+### Quick Start
+
+```bash
+cp foundry.doctor.example.json foundry.doctor.json
+pnpm doctor:foundry
+pnpm doctor:foundry -- --json
+```
+
+### Optional Env Controls
+
+```bash
+FANGIO_REQUIRE_PRIVATE_NETWORK=true
+FANGIO_FOUNDRY_REGION_RISK_DENYLIST=westeurope
+FANGIO_DATA_DIR=.fangio
+```
+
+The command exits with code `1` when any check fails.
+
+---
+
 ## Using GitHub Models
 
 Fangio uses [GitHub Models](https://github.com/marketplace/models) as its default LLM provider. This means you can power Fangio with AI models directly from GitHub — no separate API key needed!
