@@ -3,7 +3,7 @@
 
 > Plan → Approve → Execute → Replay
 
-Fangio is a local-first runtime that makes AI agent actions **observable, governable, and replayable** — turning agent behavior into something developers can actually trust.
+Fangio is a local-first runtime that makes AI agent actions **observable, governable, and replayable**, turning agent behavior into something developers can actually trust.
 
 As agents become capable of executing real system tasks, the industry is rapidly shifting from:
 
@@ -39,7 +39,7 @@ The runtime decides.**
 ### Local-First
 Tool execution happens on the user’s machine.
 
-Sensitive artifacts — logs, filesystem data, repo contents — never leave the runtime.
+Sensitive artifacts (logs, filesystem data, repo contents) never leave the runtime.
 
 ### Zero Trust Toward the Model
 LLMs are treated as planners, not operators.
@@ -83,7 +83,7 @@ Replay Timeline
 ## Features
 
 ### Structured Planning
-Agents must output strict JSON — no free-form reasoning controlling execution.
+Agents must output strict JSON with no free-form reasoning controlling execution.
 
 ### Capability Registry
 Tools are explicitly registered and risk-tiered.
@@ -131,7 +131,7 @@ This creates full operational transparency.
 ---
 
 ### Replay Mode
-Runs are persisted and can be replayed deterministically — no model required.
+Runs are persisted and can be replayed deterministically with no model required.
 
 This introduces auditability typically missing from agent systems.
 
@@ -164,7 +164,7 @@ fangio/
 - execa
 - Server-Sent Events (SSE)
 
-No database required — Fangio is intentionally lightweight and local-first.
+No database required. Fangio is intentionally lightweight and local-first.
 
 ---
 
@@ -255,7 +255,7 @@ In `--strict` mode (or `FANGIO_DOCTOR_STRICT=true`), warnings also fail the run 
 
 ## Using GitHub Models
 
-Fangio uses [GitHub Models](https://github.com/marketplace/models) as its default LLM provider. This means you can power Fangio with AI models directly from GitHub — no separate API key needed!
+Fangio uses [GitHub Models](https://github.com/marketplace/models) as its default LLM provider. This means you can power Fangio with AI models directly from GitHub with no separate API key needed.
 
 ### Setup
 
@@ -311,7 +311,7 @@ LLM_API_KEY=your_key_here
 
 ### Demo Mode
 
-If no key is present, Fangio falls back to deterministic canned plans — ensuring reliable demos even offline.
+If no key is present, Fangio falls back to deterministic canned plans, ensuring reliable demos even offline.
 
 ---
 
