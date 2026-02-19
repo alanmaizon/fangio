@@ -2,9 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { generatePlan } from '@fangio/planner';
 import { storePlan, emitEvent } from '../store.js';
+import { createPlanMetadata, withEventContext } from '../event-context.js';
 
 const CreatePlanSchema = z.object({
   goal: z.string().min(1),
+  channel: z.string().min(1).optional(),
+  traceId: z.string().min(1).optional(),
+  responseId: z.string().min(1).optional(),
 });
 
 const planRequestCounters = new Map<string, { count: number; windowStartMs: number }>();
@@ -55,6 +59,12 @@ export async function planRoute(fastify: FastifyInstance) {
 
       // Generate plan
       const plan = await generatePlan(body.goal);
+      plan.metadata = createPlanMetadata({
+        traceId: body.traceId,
+        responseId: body.responseId,
+        channel: body.channel,
+        headerChannel: request.headers['x-fangio-channel'],
+      });
       const approvalTimestamp = new Date().toISOString();
 
       // Auto-approve low-risk steps
@@ -74,7 +84,7 @@ export async function planRoute(fastify: FastifyInstance) {
       emitEvent({
         planId: plan.planId,
         type: 'plan.created',
-        data: { goal: plan.goal, stepCount: plan.steps.length },
+        data: withEventContext(plan, { goal: plan.goal, stepCount: plan.steps.length }),
         timestamp: new Date().toISOString(),
       });
 

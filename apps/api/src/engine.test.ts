@@ -23,6 +23,11 @@ test('engine executes approved steps and persists replayable events', async () =
 
   try {
     const plan: Plan = createBasePlan('plan-engine-success');
+    plan.metadata = {
+      traceId: 'trace-engine-success',
+      responseId: 'resp-engine-success',
+      channel: 'activity_protocol',
+    };
     plan.steps.push({
       id: 'step-1',
       tool: 'git.status',
@@ -41,6 +46,11 @@ test('engine executes approved steps and persists replayable events', async () =
       events.map((event) => event.type),
       ['step.started', 'step.output', 'step.finished', 'execution.finished']
     );
+    for (const event of events) {
+      assert.equal((event.data as any).traceId, 'trace-engine-success');
+      assert.equal((event.data as any).responseId, 'resp-engine-success');
+      assert.equal((event.data as any).channel, 'activity_protocol');
+    }
 
     resetStore();
     const replayedEvents = await loadRun(plan.planId);
@@ -58,6 +68,11 @@ test('engine emits step.error for unknown tools without crashing execution', asy
 
   try {
     const plan: Plan = createBasePlan('plan-engine-unknown-tool');
+    plan.metadata = {
+      traceId: 'trace-engine-error',
+      responseId: 'resp-engine-error',
+      channel: 'copilot_studio',
+    };
     plan.steps.push({
       id: 'step-1',
       tool: 'tool.does.not.exist',
@@ -76,6 +91,11 @@ test('engine emits step.error for unknown tools without crashing execution', asy
       events.map((event) => event.type),
       ['step.started', 'step.error', 'step.finished', 'execution.finished']
     );
+    for (const event of events) {
+      assert.equal((event.data as any).traceId, 'trace-engine-error');
+      assert.equal((event.data as any).responseId, 'resp-engine-error');
+      assert.equal((event.data as any).channel, 'copilot_studio');
+    }
   } finally {
     resetStore();
     await rm(dataDir, { recursive: true, force: true });
@@ -89,6 +109,11 @@ test('engine skips unapproved steps and records the skip as an error event', asy
 
   try {
     const plan: Plan = createBasePlan('plan-engine-unapproved');
+    plan.metadata = {
+      traceId: 'trace-engine-skip',
+      responseId: 'resp-engine-skip',
+      channel: 'playground',
+    };
     plan.steps.push({
       id: 'step-1',
       tool: 'git.status',
@@ -107,6 +132,11 @@ test('engine skips unapproved steps and records the skip as an error event', asy
       ['step.error', 'step.finished', 'execution.finished']
     );
     assert.match(JSON.stringify(events[0].data), /not approved/i);
+    for (const event of events) {
+      assert.equal((event.data as any).traceId, 'trace-engine-skip');
+      assert.equal((event.data as any).responseId, 'resp-engine-skip');
+      assert.equal((event.data as any).channel, 'playground');
+    }
   } finally {
     resetStore();
     await rm(dataDir, { recursive: true, force: true });

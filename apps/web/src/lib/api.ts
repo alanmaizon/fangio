@@ -5,6 +5,11 @@ export interface Plan {
   goal: string;
   steps: PlanStep[];
   createdAt: string;
+  metadata?: {
+    traceId: string;
+    channel: string;
+    responseId: string;
+  };
 }
 
 export interface PlanStep {

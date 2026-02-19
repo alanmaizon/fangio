@@ -237,6 +237,7 @@ Fangio includes a validator to spot high-risk adoption gaps before production ro
 cp foundry.doctor.example.json foundry.doctor.json
 pnpm doctor:foundry
 pnpm doctor:foundry -- --json
+pnpm doctor:foundry -- --strict
 ```
 
 ### Optional Env Controls
@@ -248,6 +249,7 @@ FANGIO_DATA_DIR=.fangio
 ```
 
 The command exits with code `1` when any check fails.
+In `--strict` mode (or `FANGIO_DOCTOR_STRICT=true`), warnings also fail the run for CI gating.
 
 ---
 

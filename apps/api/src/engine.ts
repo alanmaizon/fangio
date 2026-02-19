@@ -1,5 +1,6 @@
 import { executeTool } from '@fangio/tools';
 import { getPlanOrLoad, emitEvent, persistRun } from './store.js';
+import { withEventContext } from './event-context.js';
 
 export async function executePlan(planId: string): Promise<void> {
   const plan = await getPlanOrLoad(planId);
@@ -15,7 +16,7 @@ export async function executePlan(planId: string): Promise<void> {
           planId,
           type: 'step.error',
           stepId: step.id,
-          data: { error: 'High-risk step not approved, skipping' },
+          data: withEventContext(plan, { error: 'High-risk step not approved, skipping' }),
           timestamp: new Date().toISOString(),
         });
       } else {
@@ -23,7 +24,7 @@ export async function executePlan(planId: string): Promise<void> {
           planId,
           type: 'step.error',
           stepId: step.id,
-          data: { error: 'Step not approved, skipping' },
+          data: withEventContext(plan, { error: 'Step not approved, skipping' }),
           timestamp: new Date().toISOString(),
         });
       }
@@ -31,6 +32,7 @@ export async function executePlan(planId: string): Promise<void> {
         planId,
         type: 'step.finished',
         stepId: step.id,
+        data: withEventContext(plan),
         timestamp: new Date().toISOString(),
       });
       continue;
@@ -41,7 +43,7 @@ export async function executePlan(planId: string): Promise<void> {
       planId,
       type: 'step.started',
       stepId: step.id,
-      data: { tool: step.tool, args: step.args },
+      data: withEventContext(plan, { tool: step.tool, args: step.args }),
       timestamp: new Date().toISOString(),
     });
 
@@ -54,7 +56,7 @@ export async function executePlan(planId: string): Promise<void> {
         planId,
         type: 'step.output',
         stepId: step.id,
-        data: result,
+        data: withEventContext(plan, result),
         timestamp: new Date().toISOString(),
       });
 
@@ -63,6 +65,7 @@ export async function executePlan(planId: string): Promise<void> {
         planId,
         type: 'step.finished',
         stepId: step.id,
+        data: withEventContext(plan),
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
@@ -71,7 +74,7 @@ export async function executePlan(planId: string): Promise<void> {
         planId,
         type: 'step.error',
         stepId: step.id,
-        data: { error: error.message || String(error) },
+        data: withEventContext(plan, { error: error.message || String(error) }),
         timestamp: new Date().toISOString(),
       });
 
@@ -80,6 +83,7 @@ export async function executePlan(planId: string): Promise<void> {
         planId,
         type: 'step.finished',
         stepId: step.id,
+        data: withEventContext(plan),
         timestamp: new Date().toISOString(),
       });
     }
@@ -89,6 +93,7 @@ export async function executePlan(planId: string): Promise<void> {
   emitEvent({
     planId,
     type: 'execution.finished',
+    data: withEventContext(plan),
     timestamp: new Date().toISOString(),
   });
 

@@ -154,3 +154,49 @@ test('POST /api/execute can load persisted plans after in-memory reset', async (
     await rm(dataDir, { recursive: true, force: true });
   }
 });
+
+test('POST /api/plan stores trace metadata and emits it in plan.created events', async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'fangio-api-trace-'));
+  process.env.FANGIO_DATA_DIR = dataDir;
+  process.env.NODE_ENV = 'test';
+  delete process.env.LLM_API_KEY;
+  delete process.env.GITHUB_TOKEN;
+  resetPlanRateLimiter();
+  resetStore();
+
+  const app = await buildApp({ logger: false });
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/plan',
+      payload: {
+        goal: 'trace metadata test',
+        traceId: 'trace-123',
+        responseId: 'resp-123',
+        channel: 'copilot_studio',
+      },
+    });
+    const body = JSON.parse(response.body);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(body.plan.metadata.traceId, 'trace-123');
+    assert.equal(body.plan.metadata.responseId, 'resp-123');
+    assert.equal(body.plan.metadata.channel, 'copilot_studio');
+
+    const replay = await app.inject({
+      method: 'GET',
+      url: `/api/replay?planId=${body.planId}`,
+    });
+    const replayBody = JSON.parse(replay.body);
+    const planCreated = replayBody.events.find((event: any) => event.type === 'plan.created');
+
+    assert.equal(planCreated.data.traceId, 'trace-123');
+    assert.equal(planCreated.data.responseId, 'resp-123');
+    assert.equal(planCreated.data.channel, 'copilot_studio');
+  } finally {
+    await app.close();
+    resetPlanRateLimiter();
+    resetStore();
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});

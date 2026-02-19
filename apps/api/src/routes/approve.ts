@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getPlanOrLoad, updatePlan, emitEvent } from '../store.js';
+import { withEventContext } from '../event-context.js';
 
 const ApproveStepsSchema = z.object({
   planId: z.string(),
@@ -33,6 +34,7 @@ export async function approveRoute(fastify: FastifyInstance) {
             planId: body.planId,
             type: 'step.approved',
             stepId,
+            data: withEventContext(plan),
             timestamp: new Date().toISOString(),
           });
         }

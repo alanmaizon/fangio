@@ -16,12 +16,20 @@ export const PlanStepSchema = z.object({
 });
 export type PlanStep = z.infer<typeof PlanStepSchema>;
 
+export const PlanMetadataSchema = z.object({
+  traceId: z.string(),
+  channel: z.string(),
+  responseId: z.string(),
+});
+export type PlanMetadata = z.infer<typeof PlanMetadataSchema>;
+
 // Plan schema and type
 export const PlanSchema = z.object({
   planId: z.string(),
   goal: z.string(),
   steps: z.array(PlanStepSchema),
   createdAt: z.string(),
+  metadata: PlanMetadataSchema.optional(),
 });
 export type Plan = z.infer<typeof PlanSchema>;
 

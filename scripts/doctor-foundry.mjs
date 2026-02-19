@@ -3,12 +3,19 @@
 import { runFoundryDoctor, renderDoctorReport } from './doctor-foundry-lib.mjs';
 
 function parseArgs(argv) {
-  const args = { json: false, configPath: null, dataDir: null };
+  const args = { json: false, configPath: null, dataDir: null, strict: false };
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
+    if (arg === '--') {
+      continue;
+    }
     if (arg === '--json') {
       args.json = true;
+      continue;
+    }
+    if (arg === '--strict' || arg === '--fail-on-warn') {
+      args.strict = true;
       continue;
     }
     if (arg === '--config' && argv[i + 1]) {
@@ -31,7 +38,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`Usage: pnpm doctor:foundry [--json] [--config <path>] [--data-dir <path>]
+  console.log(`Usage: pnpm doctor:foundry [--json] [--strict] [--config <path>] [--data-dir <path>]
 
 Checks:
   - Foundry auth and model deployment config
@@ -55,10 +62,15 @@ const result = await runFoundryDoctor({
   dataDir: args.dataDir || undefined,
 });
 
+const strictMode = args.strict || process.env.FANGIO_DOCTOR_STRICT === 'true';
 if (args.json) {
   console.log(JSON.stringify(result, null, 2));
 } else {
   console.log(renderDoctorReport(result));
+  if (strictMode) {
+    console.log('\nStrict mode: enabled');
+  }
 }
 
-process.exit(result.status === 'fail' ? 1 : 0);
+const failInStrictMode = strictMode && result.summary.warn > 0;
+process.exit(result.status === 'fail' || failInStrictMode ? 1 : 0);
