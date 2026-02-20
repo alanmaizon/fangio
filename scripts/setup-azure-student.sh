@@ -12,6 +12,10 @@ STATIC_WEB_APP_NAME="fangio-web-$(date +%s)"
 API_RUNTIME=""
 SUBSCRIPTION=""
 SET_GITHUB_SECRETS="false"
+WEB_HOSTING_MODE="staticwebapp"
+WEB_APP_SERVICE_NAME=""
+WEB_URL=""
+WEB_HOSTING_REQUEST="auto"
 
 usage() {
   cat <<'USAGE'
@@ -25,6 +29,7 @@ Options:
   --plan-sku <sku>             App Service plan sku (default: B1)
   --api-app-name <name>        App Service app name (global unique)
   --web-app-name <name>        Static Web App name (global unique)
+  --web-hosting <mode>         Web hosting mode: auto, staticwebapp, appservice (default: auto)
   --api-runtime <value>        Linux runtime for App Service (example: NODE|20-lts)
   --subscription <id-or-name>  Azure subscription id or name
   --set-github-secrets         Push required GitHub Actions secrets via gh CLI
@@ -70,6 +75,10 @@ while [[ $# -gt 0 ]]; do
       STATIC_WEB_APP_NAME="$2"
       shift 2
       ;;
+    --web-hosting)
+      WEB_HOSTING_REQUEST="$2"
+      shift 2
+      ;;
     --api-runtime)
       API_RUNTIME="$2"
       shift 2
@@ -93,6 +102,15 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+case "$WEB_HOSTING_REQUEST" in
+  auto|staticwebapp|appservice)
+    ;;
+  *)
+    echo "Invalid --web-hosting value: $WEB_HOSTING_REQUEST (use auto, staticwebapp, or appservice)" >&2
+    exit 1
+    ;;
+esac
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -252,6 +270,86 @@ build_static_region_candidates() {
   add_unique_candidate "brazilsouth" STATIC_REGION_CANDIDATES
 }
 
+extract_error_summary() {
+  local error_file="$1"
+  local summary
+
+  summary="$(
+    (
+      grep -E '^\([^)]+\)|^Code:|^Message:|^ERROR:' "$error_file" 2>/dev/null || true
+    ) | head -n 3 | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/[[:space:]]$//'
+  )"
+
+  if [[ -z "$summary" ]]; then
+    summary="$(tail -n 5 "$error_file" 2>/dev/null | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/[[:space:]]$//')"
+  fi
+
+  printf '%s' "$summary"
+}
+
+create_web_on_appservice() {
+  WEB_APP_SERVICE_NAME="$STATIC_WEB_APP_NAME"
+  WEB_HOSTING_MODE="appservice"
+
+  if run_az webapp show --resource-group "$RESOURCE_GROUP" --name "$WEB_APP_SERVICE_NAME" >/dev/null 2>&1; then
+    echo "Using existing Web App (fallback mode): ${WEB_APP_SERVICE_NAME}"
+  else
+    echo "Creating Web App fallback on App Service: ${WEB_APP_SERVICE_NAME}"
+    build_runtime_candidates
+
+    local fallback_created="false"
+    local fallback_error_file
+    fallback_error_file="$(mktemp)"
+
+    for candidate_runtime in "${RUNTIME_CANDIDATES[@]}"; do
+      echo "Trying Web App runtime: ${candidate_runtime}"
+      if run_az webapp create \
+        --resource-group "$RESOURCE_GROUP" \
+        --plan "$APP_SERVICE_PLAN" \
+        --name "$WEB_APP_SERVICE_NAME" \
+        --runtime "$candidate_runtime" \
+        --https-only true \
+        --output none >"$fallback_error_file" 2>&1; then
+        fallback_created="true"
+        echo "Web App fallback created with runtime: ${candidate_runtime}"
+        break
+      else
+        err_summary="$(extract_error_summary "$fallback_error_file")"
+        if [[ -n "$err_summary" ]]; then
+          echo "Runtime ${candidate_runtime} rejected: ${err_summary}"
+        fi
+      fi
+    done
+
+    if [[ "$fallback_created" != "true" ]]; then
+      echo "Failed to create Web App fallback with available Node runtimes." >&2
+      cat "$fallback_error_file" >&2 || true
+      rm -f "$fallback_error_file"
+      exit 1
+    fi
+    rm -f "$fallback_error_file"
+  fi
+
+  if ! run_az webapp config set \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$WEB_APP_SERVICE_NAME" \
+    --startup-file "pm2 serve /home/site/wwwroot --no-daemon --spa" \
+    --output none >/dev/null 2>&1; then
+    echo "Warning: could not set startup command automatically. Set it manually to: pm2 serve /home/site/wwwroot --no-daemon --spa"
+  fi
+
+  run_az webapp update \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$WEB_APP_SERVICE_NAME" \
+    --https-only true \
+    --output none >/dev/null 2>&1 || true
+
+  local web_host
+  web_host="$(run_az webapp show --resource-group "$RESOURCE_GROUP" --name "$WEB_APP_SERVICE_NAME" --query defaultHostName -o tsv)"
+  WEB_URL="https://${web_host}"
+  echo "Web UI fallback URL: ${WEB_URL}"
+}
+
 require_cmd az
 
 if ! run_az account show >/dev/null 2>&1; then
@@ -295,9 +393,9 @@ else
       echo "App Service plan created in region: ${LOCATION}"
       break
     else
-      err_line="$(tail -n 1 "$PLAN_LAST_ERROR_FILE" 2>/dev/null || true)"
-      if [[ -n "$err_line" ]]; then
-        echo "Region ${candidate_region} rejected: ${err_line}"
+      err_summary="$(extract_error_summary "$PLAN_LAST_ERROR_FILE")"
+      if [[ -n "$err_summary" ]]; then
+        echo "Region ${candidate_region} rejected: ${err_summary}"
       fi
     fi
   done
@@ -338,9 +436,9 @@ else
       echo "API app created with runtime: ${API_RUNTIME}"
       break
     else
-      err_line="$(tail -n 1 "$WEBAPP_LAST_ERROR_FILE" 2>/dev/null || true)"
-      if [[ -n "$err_line" ]]; then
-        echo "Runtime ${candidate_runtime} rejected: ${err_line}"
+      err_summary="$(extract_error_summary "$WEBAPP_LAST_ERROR_FILE")"
+      if [[ -n "$err_summary" ]]; then
+        echo "Runtime ${candidate_runtime} rejected: ${err_summary}"
       fi
     fi
   done
@@ -354,60 +452,83 @@ else
   rm -f "$WEBAPP_LAST_ERROR_FILE"
 fi
 
-if run_az staticwebapp show --resource-group "$RESOURCE_GROUP" --name "$STATIC_WEB_APP_NAME" >/dev/null 2>&1; then
-  echo "Using existing Static Web App: ${STATIC_WEB_APP_NAME}"
+if [[ "$WEB_HOSTING_REQUEST" == "appservice" ]]; then
+  echo "Web hosting mode forced to appservice"
+  create_web_on_appservice
 else
-  echo "Creating Static Web App: ${STATIC_WEB_APP_NAME}"
-  build_static_region_candidates
+  if run_az staticwebapp show --resource-group "$RESOURCE_GROUP" --name "$STATIC_WEB_APP_NAME" >/dev/null 2>&1; then
+    echo "Using existing Static Web App: ${STATIC_WEB_APP_NAME}"
+    WEB_HOSTING_MODE="staticwebapp"
+    WEB_HOST="$(run_az staticwebapp show --resource-group "$RESOURCE_GROUP" --name "$STATIC_WEB_APP_NAME" --query defaultHostname -o tsv)"
+    WEB_URL="https://${WEB_HOST}"
+  else
+    echo "Creating Static Web App: ${STATIC_WEB_APP_NAME}"
+    build_static_region_candidates
 
-  SWA_CREATED="false"
-  SWA_LAST_ERROR_FILE="$(mktemp)"
-  for candidate_region in "${STATIC_REGION_CANDIDATES[@]}"; do
-    echo "Trying Static Web App region: ${candidate_region}"
-    if run_az staticwebapp create \
-      --resource-group "$RESOURCE_GROUP" \
-      --name "$STATIC_WEB_APP_NAME" \
-      --location "$candidate_region" \
-      --sku Free \
-      --output none >"$SWA_LAST_ERROR_FILE" 2>&1; then
-      STATIC_LOCATION="$candidate_region"
-      SWA_CREATED="true"
-      echo "Static Web App created in region: ${STATIC_LOCATION}"
-      break
-    else
-      err_line="$(tail -n 1 "$SWA_LAST_ERROR_FILE" 2>/dev/null || true)"
-      if [[ -n "$err_line" ]]; then
-        echo "Region ${candidate_region} rejected: ${err_line}"
+    SWA_CREATED="false"
+    SWA_LAST_ERROR_FILE="$(mktemp)"
+    for candidate_region in "${STATIC_REGION_CANDIDATES[@]}"; do
+      echo "Trying Static Web App region: ${candidate_region}"
+      if run_az staticwebapp create \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$STATIC_WEB_APP_NAME" \
+        --location "$candidate_region" \
+        --sku Free \
+        --output none >"$SWA_LAST_ERROR_FILE" 2>&1; then
+        STATIC_LOCATION="$candidate_region"
+        SWA_CREATED="true"
+        WEB_HOSTING_MODE="staticwebapp"
+        echo "Static Web App created in region: ${STATIC_LOCATION}"
+        break
+      else
+        err_summary="$(extract_error_summary "$SWA_LAST_ERROR_FILE")"
+        if [[ -n "$err_summary" ]]; then
+          echo "Region ${candidate_region} rejected: ${err_summary}"
+        fi
+      fi
+    done
+
+    if [[ "$SWA_CREATED" != "true" ]]; then
+      echo "Trying Static Web App create with Azure default location"
+      if run_az staticwebapp create \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$STATIC_WEB_APP_NAME" \
+        --sku Free \
+        --output none >"$SWA_LAST_ERROR_FILE" 2>&1; then
+        SWA_CREATED="true"
+        STATIC_LOCATION="azure-default"
+        WEB_HOSTING_MODE="staticwebapp"
+        echo "Static Web App created with Azure default location"
       fi
     fi
-  done
 
-  if [[ "$SWA_CREATED" != "true" ]]; then
-    echo "Trying Static Web App create with Azure default location"
-    if run_az staticwebapp create \
-      --resource-group "$RESOURCE_GROUP" \
-      --name "$STATIC_WEB_APP_NAME" \
-      --sku Free \
-      --output none >"$SWA_LAST_ERROR_FILE" 2>&1; then
-      SWA_CREATED="true"
-      STATIC_LOCATION="azure-default"
-      echo "Static Web App created with Azure default location"
+    if [[ "$SWA_CREATED" == "true" ]]; then
+      WEB_HOST="$(run_az staticwebapp show --resource-group "$RESOURCE_GROUP" --name "$STATIC_WEB_APP_NAME" --query defaultHostname -o tsv)"
+      WEB_URL="https://${WEB_HOST}"
     fi
-  fi
 
-  if [[ "$SWA_CREATED" != "true" ]]; then
-    echo "Failed to create Static Web App in all candidate regions." >&2
-    cat "$SWA_LAST_ERROR_FILE" >&2 || true
+    if [[ "$SWA_CREATED" != "true" ]]; then
+      if [[ "$WEB_HOSTING_REQUEST" == "auto" ]]; then
+        echo "Static Web App provisioning failed due subscription policy. Falling back to App Service hosting for web UI."
+        create_web_on_appservice
+      else
+        echo "Failed to create Static Web App in all candidate regions." >&2
+        cat "$SWA_LAST_ERROR_FILE" >&2 || true
+        rm -f "$SWA_LAST_ERROR_FILE"
+        exit 1
+      fi
+    fi
     rm -f "$SWA_LAST_ERROR_FILE"
-    exit 1
   fi
-  rm -f "$SWA_LAST_ERROR_FILE"
 fi
 
 API_HOST="$(run_az webapp show --resource-group "$RESOURCE_GROUP" --name "$API_APP_NAME" --query defaultHostName -o tsv)"
-WEB_HOST="$(run_az staticwebapp show --resource-group "$RESOURCE_GROUP" --name "$STATIC_WEB_APP_NAME" --query defaultHostname -o tsv)"
 API_URL="https://${API_HOST}"
-WEB_URL="https://${WEB_HOST}"
+
+if [[ -z "$WEB_URL" ]]; then
+  echo "Failed to determine web URL for hosting mode: ${WEB_HOSTING_MODE}" >&2
+  exit 1
+fi
 
 echo "Configuring API app settings"
 run_az webapp config appsettings set \
@@ -417,8 +538,12 @@ run_az webapp config appsettings set \
   --output none
 
 PUBLISH_PROFILE_FILE="$(mktemp)"
+WEB_PUBLISH_PROFILE_FILE=""
 cleanup() {
   rm -f "$PUBLISH_PROFILE_FILE"
+  if [[ -n "$WEB_PUBLISH_PROFILE_FILE" ]]; then
+    rm -f "$WEB_PUBLISH_PROFILE_FILE"
+  fi
 }
 trap cleanup EXIT
 
@@ -427,49 +552,79 @@ run_az webapp deployment list-publishing-profiles \
   --name "$API_APP_NAME" \
   --xml >"$PUBLISH_PROFILE_FILE"
 
-SWA_TOKEN="$(run_az staticwebapp secrets list --resource-group "$RESOURCE_GROUP" --name "$STATIC_WEB_APP_NAME" --query properties.apiKey -o tsv || true)"
-if [[ -z "$SWA_TOKEN" ]]; then
-  SWA_TOKEN="$(run_az staticwebapp secrets list --resource-group "$RESOURCE_GROUP" --name "$STATIC_WEB_APP_NAME" --query apiKey -o tsv || true)"
-fi
+SWA_TOKEN=""
+if [[ "$WEB_HOSTING_MODE" == "staticwebapp" ]]; then
+  SWA_TOKEN="$(run_az staticwebapp secrets list --resource-group "$RESOURCE_GROUP" --name "$STATIC_WEB_APP_NAME" --query properties.apiKey -o tsv || true)"
+  if [[ -z "$SWA_TOKEN" ]]; then
+    SWA_TOKEN="$(run_az staticwebapp secrets list --resource-group "$RESOURCE_GROUP" --name "$STATIC_WEB_APP_NAME" --query apiKey -o tsv || true)"
+  fi
 
-if [[ -z "$SWA_TOKEN" ]]; then
-  echo "Could not retrieve Static Web Apps deployment token." >&2
-  exit 1
+  if [[ -z "$SWA_TOKEN" ]]; then
+    echo "Could not retrieve Static Web Apps deployment token." >&2
+    exit 1
+  fi
+else
+  WEB_PUBLISH_PROFILE_FILE="$(mktemp)"
+  run_az webapp deployment list-publishing-profiles \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$WEB_APP_SERVICE_NAME" \
+    --xml >"$WEB_PUBLISH_PROFILE_FILE"
 fi
 
 if [[ "$SET_GITHUB_SECRETS" == "true" ]]; then
   echo "Setting GitHub Actions secrets in current repository"
   gh secret set AZURE_API_APP_NAME --body "$API_APP_NAME"
   gh secret set AZURE_API_PUBLISH_PROFILE <"$PUBLISH_PROFILE_FILE"
-  gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --body "$SWA_TOKEN"
   gh secret set VITE_API_URL --body "$API_URL"
+
+  if [[ "$WEB_HOSTING_MODE" == "staticwebapp" ]]; then
+    gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --body "$SWA_TOKEN"
+  else
+    gh secret set AZURE_WEB_APP_NAME --body "$WEB_APP_SERVICE_NAME"
+    gh secret set AZURE_WEB_PUBLISH_PROFILE <"$WEB_PUBLISH_PROFILE_FILE"
+  fi
 fi
 
-cat <<EOF
-
-Azure setup complete.
-
-API URL:
-  $API_URL
-
-Web URL:
-  $WEB_URL
-
-GitHub workflow secrets:
-  AZURE_API_APP_NAME=$API_APP_NAME
-  AZURE_API_PUBLISH_PROFILE=<xml from az webapp deployment list-publishing-profiles --xml>
-  AZURE_STATIC_WEB_APPS_API_TOKEN=<token from az staticwebapp secrets list>
-  VITE_API_URL=$API_URL
-  API_RUNTIME_USED=${API_RUNTIME:-auto}
-
-If you did not use --set-github-secrets, run:
-  gh secret set AZURE_API_APP_NAME --body "$API_APP_NAME"
-  az webapp deployment list-publishing-profiles --resource-group "$RESOURCE_GROUP" --name "$API_APP_NAME" --xml | gh secret set AZURE_API_PUBLISH_PROFILE
-  gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --body "$(az staticwebapp secrets list --resource-group "$RESOURCE_GROUP" --name "$STATIC_WEB_APP_NAME" --query properties.apiKey -o tsv)"
-  gh secret set VITE_API_URL --body "$API_URL"
-
-Then trigger:
-  - .github/workflows/deploy-api-appservice.yml
-  - .github/workflows/deploy-web-static.yml
-
-EOF
+echo
+echo "Azure setup complete."
+echo
+echo "API URL:"
+echo "  $API_URL"
+echo
+echo "Web URL:"
+echo "  $WEB_URL"
+echo
+echo "Web hosting mode:"
+echo "  $WEB_HOSTING_MODE"
+echo
+echo "GitHub workflow secrets:"
+echo "  AZURE_API_APP_NAME=$API_APP_NAME"
+echo "  AZURE_API_PUBLISH_PROFILE=<xml from az webapp deployment list-publishing-profiles --xml>"
+echo "  VITE_API_URL=$API_URL"
+echo "  API_RUNTIME_USED=${API_RUNTIME:-auto}"
+if [[ "$WEB_HOSTING_MODE" == "staticwebapp" ]]; then
+  echo "  AZURE_STATIC_WEB_APPS_API_TOKEN=<token from az staticwebapp secrets list>"
+else
+  echo "  AZURE_WEB_APP_NAME=$WEB_APP_SERVICE_NAME"
+  echo "  AZURE_WEB_PUBLISH_PROFILE=<xml from az webapp deployment list-publishing-profiles for web app>"
+fi
+echo
+echo "If you did not use --set-github-secrets, run:"
+echo "  gh secret set AZURE_API_APP_NAME --body \"$API_APP_NAME\""
+echo "  az webapp deployment list-publishing-profiles --resource-group \"$RESOURCE_GROUP\" --name \"$API_APP_NAME\" --xml | gh secret set AZURE_API_PUBLISH_PROFILE"
+echo "  gh secret set VITE_API_URL --body \"$API_URL\""
+if [[ "$WEB_HOSTING_MODE" == "staticwebapp" ]]; then
+  echo "  gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --body \"\$(az staticwebapp secrets list --resource-group \"$RESOURCE_GROUP\" --name \"$STATIC_WEB_APP_NAME\" --query properties.apiKey -o tsv)\""
+else
+  echo "  gh secret set AZURE_WEB_APP_NAME --body \"$WEB_APP_SERVICE_NAME\""
+  echo "  az webapp deployment list-publishing-profiles --resource-group \"$RESOURCE_GROUP\" --name \"$WEB_APP_SERVICE_NAME\" --xml | gh secret set AZURE_WEB_PUBLISH_PROFILE"
+fi
+echo
+echo "Then trigger:"
+echo "  - .github/workflows/deploy-api-appservice.yml"
+if [[ "$WEB_HOSTING_MODE" == "staticwebapp" ]]; then
+  echo "  - .github/workflows/deploy-web-static.yml"
+else
+  echo "  - .github/workflows/deploy-web-appservice.yml"
+fi
+echo

@@ -231,6 +231,7 @@ This repo includes deployment workflows:
 
 - `.github/workflows/deploy-api-appservice.yml`
 - `.github/workflows/deploy-web-static.yml`
+- `.github/workflows/deploy-web-appservice.yml` (fallback when Static Web Apps is blocked by subscription policy)
 
 ### Fast setup (recommended)
 
@@ -245,6 +246,7 @@ This command:
 - creates Static Web App
 - auto-retries alternative regions if your subscription blocks the default region
 - auto-tries compatible Linux Node runtimes if one runtime string is rejected
+- falls back to Web UI on App Service when Static Web Apps is policy-blocked
 - sets API app settings (`NODE_ENV`, `CORS_ORIGINS`)
 - writes required GitHub Actions secrets in your current repo
 
@@ -265,6 +267,12 @@ pnpm azure:setup -- \
   --static-location centralus
 ```
 
+Force App Service hosting for the web UI (skip Static Web Apps):
+
+```bash
+pnpm azure:setup -- --set-github-secrets --web-hosting appservice
+```
+
 ### 1) Create Azure resources
 
 Create:
@@ -278,15 +286,23 @@ In GitHub -> Settings -> Secrets and variables -> Actions, add:
 
 - `AZURE_API_APP_NAME`: App Service name (example: `fangio-api`)
 - `AZURE_API_PUBLISH_PROFILE`: publish profile XML from App Service -> Overview -> Get publish profile
-- `AZURE_STATIC_WEB_APPS_API_TOKEN`: deployment token from Static Web App -> Manage deployment token
 - `VITE_API_URL`: public API URL (example: `https://fangio-api.azurewebsites.net`)
+
+For Static Web Apps mode, also add:
+
+- `AZURE_STATIC_WEB_APPS_API_TOKEN`: deployment token from Static Web App -> Manage deployment token
+
+For App Service web fallback mode, add instead:
+
+- `AZURE_WEB_APP_NAME`
+- `AZURE_WEB_PUBLISH_PROFILE`
 
 ### 3) Configure API environment variables
 
 In App Service -> Environment variables, set:
 
 - `NODE_ENV=production`
-- `CORS_ORIGINS=https://<your-static-web-app>.azurestaticapps.net`
+- `CORS_ORIGINS=https://<your-web-host>`
 - `GITHUB_TOKEN` or `LLM_API_KEY` (depending on your model provider)
 - optional `LLM_MODEL` and `LLM_BASE_URL`
 
@@ -296,9 +312,12 @@ Do not hardcode `PORT`; App Service injects it automatically.
 
 Push to `main` or run each workflow manually from GitHub Actions.
 
+- Static Web Apps mode: run `deploy-web-static.yml`
+- App Service web mode: run `deploy-web-appservice.yml`
+
 ### 5) Share for testing
 
-Share your Static Web App URL with testers.
+Share your web URL with testers (either `azurestaticapps.net` or `azurewebsites.net`).
 
 Flow for testers:
 
