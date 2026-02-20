@@ -1,0 +1,57 @@
+name: Deploy API to Azure App Service
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/api/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/deploy-api-appservice.yml'
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20'
+  DEPLOY_DIR: '.output/api'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build API and workspace dependencies
+        run: pnpm --filter @fangio/api... build
+
+      - name: Create deployment bundle
+        run: |
+          rm -rf "${DEPLOY_DIR}"
+          pnpm --filter @fangio/api --prod deploy "${DEPLOY_DIR}"
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_API_APP_NAME }}
+          publish-profile: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
+          package: ${{ env.DEPLOY_DIR }}

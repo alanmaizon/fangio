@@ -220,6 +220,101 @@ http://localhost:5173
 
 ---
 
+## Deploy on Azure for Students
+
+Fangio can be deployed with a simple split:
+
+- `apps/api` on Azure App Service
+- `apps/web` on Azure Static Web Apps
+
+This repo includes deployment workflows:
+
+- `.github/workflows/deploy-api-appservice.yml`
+- `.github/workflows/deploy-web-static.yml`
+
+### Fast setup (recommended)
+
+```bash
+pnpm azure:setup -- --set-github-secrets
+```
+
+This command:
+
+- creates or reuses the Azure resource group
+- creates App Service plan + API app
+- creates Static Web App
+- sets API app settings (`NODE_ENV`, `CORS_ORIGINS`)
+- writes required GitHub Actions secrets in your current repo
+
+If you prefer manual secret setup, run:
+
+```bash
+pnpm azure:setup
+```
+
+Useful overrides:
+
+```bash
+pnpm azure:setup -- \
+  --resource-group fangio-rg \
+  --api-app-name fangio-api-demo \
+  --web-app-name fangio-web-demo \
+  --location eastus \
+  --static-location centralus
+```
+
+### 1) Create Azure resources
+
+Create:
+
+- one **App Service** (Linux, Node 20) for the API
+- one **Static Web App** for the web UI
+
+### 2) Add GitHub repository secrets
+
+In GitHub -> Settings -> Secrets and variables -> Actions, add:
+
+- `AZURE_API_APP_NAME`: App Service name (example: `fangio-api`)
+- `AZURE_API_PUBLISH_PROFILE`: publish profile XML from App Service -> Overview -> Get publish profile
+- `AZURE_STATIC_WEB_APPS_API_TOKEN`: deployment token from Static Web App -> Manage deployment token
+- `VITE_API_URL`: public API URL (example: `https://fangio-api.azurewebsites.net`)
+
+### 3) Configure API environment variables
+
+In App Service -> Environment variables, set:
+
+- `NODE_ENV=production`
+- `CORS_ORIGINS=https://<your-static-web-app>.azurestaticapps.net`
+- `GITHUB_TOKEN` or `LLM_API_KEY` (depending on your model provider)
+- optional `LLM_MODEL` and `LLM_BASE_URL`
+
+Do not hardcode `PORT`; App Service injects it automatically.
+
+### 4) Deploy
+
+Push to `main` or run each workflow manually from GitHub Actions.
+
+### 5) Share for testing
+
+Share your Static Web App URL with testers.
+
+Flow for testers:
+
+- open the web URL
+- create and approve plans in UI
+- UI calls your API at `VITE_API_URL`
+- API allows requests only from `CORS_ORIGINS`
+
+Quick health check:
+
+```bash
+curl https://<your-api>.azurewebsites.net/health
+```
+
+If that returns `{"status":"ok"}`, the runtime is reachable.
+
+---
+
 ## Foundry Adoption Doctor
 
 Fangio includes a validator to spot high-risk adoption gaps before production rollout:
@@ -457,14 +552,6 @@ Fangio is intentionally **not**:
 * a prompt wrapper
 
 Instead, it treats agents as **production infrastructure** that must be observable and controllable.
-
----
-
-## Comparisons
-
-See how Fangio compares to other agent platforms:
-
-- [Fangio vs Amazon Bedrock AgentCore](docs/comparison-bedrock-agentcore.md)
 
 ---
 
