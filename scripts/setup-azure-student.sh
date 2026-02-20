@@ -128,12 +128,14 @@ add_unique_candidate() {
   eval "existing_values=(\"\${${array_name}[@]}\")"
   set -u
 
-  local existing
-  for existing in "${existing_values[@]}"; do
-    if [[ "$existing" == "$normalized_value" ]]; then
-      return
-    fi
-  done
+  if (( ${#existing_values[@]} > 0 )); then
+    local existing
+    for existing in "${existing_values[@]}"; do
+      if [[ "$existing" == "$normalized_value" ]]; then
+        return
+      fi
+    done
+  fi
 
   set +u
   eval "${array_name}+=(\"\$normalized_value\")"
@@ -166,12 +168,14 @@ add_unique_runtime_candidate() {
   eval "existing_values=(\"\${${array_name}[@]}\")"
   set -u
 
-  local existing
-  for existing in "${existing_values[@]}"; do
-    if [[ "$existing" == "$value" ]]; then
-      return
-    fi
-  done
+  if (( ${#existing_values[@]} > 0 )); then
+    local existing
+    for existing in "${existing_values[@]}"; do
+      if [[ "$existing" == "$value" ]]; then
+        return
+      fi
+    done
+  fi
 
   set +u
   eval "${array_name}+=(\"\$value\")"
@@ -241,12 +245,11 @@ build_static_region_candidates() {
   add_unique_candidate "westus2" STATIC_REGION_CANDIDATES
   add_unique_candidate "westeurope" STATIC_REGION_CANDIDATES
   add_unique_candidate "northeurope" STATIC_REGION_CANDIDATES
-
-  while IFS= read -r region; do
-    add_unique_candidate "$region" STATIC_REGION_CANDIDATES
-  done < <(
-    run_az account list-locations --query "[].name" -o tsv 2>/dev/null || true
-  )
+  add_unique_candidate "uksouth" STATIC_REGION_CANDIDATES
+  add_unique_candidate "australiaeast" STATIC_REGION_CANDIDATES
+  add_unique_candidate "southeastasia" STATIC_REGION_CANDIDATES
+  add_unique_candidate "japaneast" STATIC_REGION_CANDIDATES
+  add_unique_candidate "brazilsouth" STATIC_REGION_CANDIDATES
 }
 
 require_cmd az
@@ -291,6 +294,11 @@ else
       PLAN_CREATED="true"
       echo "App Service plan created in region: ${LOCATION}"
       break
+    else
+      err_line="$(tail -n 1 "$PLAN_LAST_ERROR_FILE" 2>/dev/null || true)"
+      if [[ -n "$err_line" ]]; then
+        echo "Region ${candidate_region} rejected: ${err_line}"
+      fi
     fi
   done
 
@@ -329,6 +337,11 @@ else
       WEBAPP_CREATED="true"
       echo "API app created with runtime: ${API_RUNTIME}"
       break
+    else
+      err_line="$(tail -n 1 "$WEBAPP_LAST_ERROR_FILE" 2>/dev/null || true)"
+      if [[ -n "$err_line" ]]; then
+        echo "Runtime ${candidate_runtime} rejected: ${err_line}"
+      fi
     fi
   done
 
@@ -361,8 +374,26 @@ else
       SWA_CREATED="true"
       echo "Static Web App created in region: ${STATIC_LOCATION}"
       break
+    else
+      err_line="$(tail -n 1 "$SWA_LAST_ERROR_FILE" 2>/dev/null || true)"
+      if [[ -n "$err_line" ]]; then
+        echo "Region ${candidate_region} rejected: ${err_line}"
+      fi
     fi
   done
+
+  if [[ "$SWA_CREATED" != "true" ]]; then
+    echo "Trying Static Web App create with Azure default location"
+    if run_az staticwebapp create \
+      --resource-group "$RESOURCE_GROUP" \
+      --name "$STATIC_WEB_APP_NAME" \
+      --sku Free \
+      --output none >"$SWA_LAST_ERROR_FILE" 2>&1; then
+      SWA_CREATED="true"
+      STATIC_LOCATION="azure-default"
+      echo "Static Web App created with Azure default location"
+    fi
+  fi
 
   if [[ "$SWA_CREATED" != "true" ]]; then
     echo "Failed to create Static Web App in all candidate regions." >&2
