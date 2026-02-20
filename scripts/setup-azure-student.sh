@@ -11,8 +11,6 @@ API_APP_NAME="fangio-api-$(date +%s)"
 STATIC_WEB_APP_NAME="fangio-web-$(date +%s)"
 SUBSCRIPTION=""
 SET_GITHUB_SECRETS="false"
-LOCATION_PROVIDED="false"
-STATIC_LOCATION_PROVIDED="false"
 
 usage() {
   cat <<'USAGE'
@@ -48,12 +46,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --location)
       LOCATION="$2"
-      LOCATION_PROVIDED="true"
       shift 2
       ;;
     --static-location)
       STATIC_LOCATION="$2"
-      STATIC_LOCATION_PROVIDED="true"
       shift 2
       ;;
     --plan-name)
@@ -193,13 +189,33 @@ if run_az appservice plan show --resource-group "$RESOURCE_GROUP" --name "$APP_S
   echo "Using existing App Service plan: ${APP_SERVICE_PLAN}"
 else
   echo "Creating App Service plan: ${APP_SERVICE_PLAN}"
-  run_az appservice plan create \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$APP_SERVICE_PLAN" \
-    --is-linux \
-    --location "$LOCATION" \
-    --sku "$APP_SERVICE_SKU" \
-    --output none
+  build_appservice_region_candidates
+
+  PLAN_CREATED="false"
+  PLAN_LAST_ERROR_FILE="$(mktemp)"
+  for candidate_region in "${APP_SERVICE_REGION_CANDIDATES[@]}"; do
+    echo "Trying App Service region: ${candidate_region}"
+    if run_az appservice plan create \
+      --resource-group "$RESOURCE_GROUP" \
+      --name "$APP_SERVICE_PLAN" \
+      --is-linux \
+      --location "$candidate_region" \
+      --sku "$APP_SERVICE_SKU" \
+      --output none >"$PLAN_LAST_ERROR_FILE" 2>&1; then
+      LOCATION="$candidate_region"
+      PLAN_CREATED="true"
+      echo "App Service plan created in region: ${LOCATION}"
+      break
+    fi
+  done
+
+  if [[ "$PLAN_CREATED" != "true" ]]; then
+    echo "Failed to create App Service plan in all candidate regions." >&2
+    cat "$PLAN_LAST_ERROR_FILE" >&2 || true
+    rm -f "$PLAN_LAST_ERROR_FILE"
+    exit 1
+  fi
+  rm -f "$PLAN_LAST_ERROR_FILE"
 fi
 
 if run_az webapp show --resource-group "$RESOURCE_GROUP" --name "$API_APP_NAME" >/dev/null 2>&1; then
@@ -224,12 +240,32 @@ if run_az staticwebapp show --resource-group "$RESOURCE_GROUP" --name "$STATIC_W
   echo "Using existing Static Web App: ${STATIC_WEB_APP_NAME}"
 else
   echo "Creating Static Web App: ${STATIC_WEB_APP_NAME}"
-  run_az staticwebapp create \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$STATIC_WEB_APP_NAME" \
-    --location "$STATIC_LOCATION" \
-    --sku Free \
-    --output none
+  build_static_region_candidates
+
+  SWA_CREATED="false"
+  SWA_LAST_ERROR_FILE="$(mktemp)"
+  for candidate_region in "${STATIC_REGION_CANDIDATES[@]}"; do
+    echo "Trying Static Web App region: ${candidate_region}"
+    if run_az staticwebapp create \
+      --resource-group "$RESOURCE_GROUP" \
+      --name "$STATIC_WEB_APP_NAME" \
+      --location "$candidate_region" \
+      --sku Free \
+      --output none >"$SWA_LAST_ERROR_FILE" 2>&1; then
+      STATIC_LOCATION="$candidate_region"
+      SWA_CREATED="true"
+      echo "Static Web App created in region: ${STATIC_LOCATION}"
+      break
+    fi
+  done
+
+  if [[ "$SWA_CREATED" != "true" ]]; then
+    echo "Failed to create Static Web App in all candidate regions." >&2
+    cat "$SWA_LAST_ERROR_FILE" >&2 || true
+    rm -f "$SWA_LAST_ERROR_FILE"
+    exit 1
+  fi
+  rm -f "$SWA_LAST_ERROR_FILE"
 fi
 
 API_HOST="$(run_az webapp show --resource-group "$RESOURCE_GROUP" --name "$API_APP_NAME" --query defaultHostName -o tsv)"

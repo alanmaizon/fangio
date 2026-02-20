@@ -243,6 +243,7 @@ This command:
 - creates or reuses the Azure resource group
 - creates App Service plan + API app
 - creates Static Web App
+- auto-retries alternative regions if your subscription blocks the default region
 - sets API app settings (`NODE_ENV`, `CORS_ORIGINS`)
 - writes required GitHub Actions secrets in your current repo
 
