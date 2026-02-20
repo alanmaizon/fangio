@@ -109,21 +109,23 @@ run_az() {
 
 add_unique_candidate() {
   local value="$1"
-  shift
-  local -n target_array="$1"
+  local array_name="$2"
 
   if [[ -z "$value" ]]; then
     return
   fi
 
+  local existing_values=()
+  eval "existing_values=(\"\${${array_name}[@]}\")"
+
   local existing
-  for existing in "${target_array[@]}"; do
+  for existing in "${existing_values[@]}"; do
     if [[ "$existing" == "$value" ]]; then
       return
     fi
   done
 
-  target_array+=("$value")
+  eval "${array_name}+=(\"\$value\")"
 }
 
 build_appservice_region_candidates() {
