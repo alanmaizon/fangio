@@ -112,7 +112,7 @@ add_unique_candidate() {
   fi
 
   local existing_values=()
-  eval "existing_values=(\"\${${array_name}[@]}\")"
+  eval "existing_values=(\"\${${array_name}[@]-}\")"
 
   local existing
   for existing in "${existing_values[@]}"; do
@@ -121,7 +121,7 @@ add_unique_candidate() {
     fi
   done
 
-  eval "${array_name}+=(\"\$value\")"
+  eval "${array_name}=(\"\${${array_name}[@]-}\" \"\$value\")"
 }
 
 build_appservice_region_candidates() {
