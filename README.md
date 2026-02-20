@@ -1,15 +1,13 @@
-# Fangio 🏁  
+# Fangio
 **A Trusted Runtime for Autonomous Agents**
 
 > Plan → Approve → Execute → Replay
 
 Fangio is a local-first runtime that makes AI agent actions **observable, governable, and replayable**, turning agent behavior into something developers can actually trust.
 
-As agents become capable of executing real system tasks, the industry is rapidly shifting from:
+As agents become capable of executing real system tasks, the industry is rapidly asking:
 
-👉 *“Can agents act?”*  
-to  
-👉 *“Can agents be trusted?”*
+*“Can agents be trusted?”*
 
 Fangio answers that question.
 
