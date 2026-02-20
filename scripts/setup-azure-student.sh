@@ -9,6 +9,7 @@ APP_SERVICE_PLAN="fangio-plan"
 APP_SERVICE_SKU="B1"
 API_APP_NAME="fangio-api-$(date +%s)"
 STATIC_WEB_APP_NAME="fangio-web-$(date +%s)"
+API_RUNTIME=""
 SUBSCRIPTION=""
 SET_GITHUB_SECRETS="false"
 
@@ -24,6 +25,7 @@ Options:
   --plan-sku <sku>             App Service plan sku (default: B1)
   --api-app-name <name>        App Service app name (global unique)
   --web-app-name <name>        Static Web App name (global unique)
+  --api-runtime <value>        Linux runtime for App Service (example: NODE|20-lts)
   --subscription <id-or-name>  Azure subscription id or name
   --set-github-secrets         Push required GitHub Actions secrets via gh CLI
   --help                       Show this help
@@ -66,6 +68,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --web-app-name)
       STATIC_WEB_APP_NAME="$2"
+      shift 2
+      ;;
+    --api-runtime)
+      API_RUNTIME="$2"
       shift 2
       ;;
     --subscription)
@@ -111,8 +117,54 @@ add_unique_candidate() {
     return
   fi
 
+  local normalized_value
+  normalized_value="$(normalize_region "$value")"
+  if [[ -z "$normalized_value" ]]; then
+    return
+  fi
+
   local existing_values=()
-  eval "existing_values=(\"\${${array_name}[@]-}\")"
+  set +u
+  eval "existing_values=(\"\${${array_name}[@]}\")"
+  set -u
+
+  local existing
+  for existing in "${existing_values[@]}"; do
+    if [[ "$existing" == "$normalized_value" ]]; then
+      return
+    fi
+  done
+
+  set +u
+  eval "${array_name}+=(\"\$normalized_value\")"
+  set -u
+}
+
+normalize_region() {
+  local value="$1"
+  value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
+  value="${value// /}"
+  value="${value//-/}"
+  value="${value//_/}"
+  value="${value//\(/}"
+  value="${value//\)/}"
+  value="${value//./}"
+  printf '%s' "$value"
+}
+
+add_unique_runtime_candidate() {
+  local value="$1"
+  local array_name="$2"
+
+  value="$(printf '%s' "$value" | tr -d '\r' | xargs)"
+  if [[ -z "$value" ]]; then
+    return
+  fi
+
+  local existing_values=()
+  set +u
+  eval "existing_values=(\"\${${array_name}[@]}\")"
+  set -u
 
   local existing
   for existing in "${existing_values[@]}"; do
@@ -121,7 +173,40 @@ add_unique_candidate() {
     fi
   done
 
-  eval "${array_name}=(\"\${${array_name}[@]-}\" \"\$value\")"
+  set +u
+  eval "${array_name}+=(\"\$value\")"
+  set -u
+}
+
+build_runtime_candidates() {
+  RUNTIME_CANDIDATES=()
+
+  if [[ -n "$API_RUNTIME" ]]; then
+    add_unique_runtime_candidate "$API_RUNTIME" RUNTIME_CANDIDATES
+  fi
+
+  while IFS= read -r runtime; do
+    add_unique_runtime_candidate "$runtime" RUNTIME_CANDIDATES
+  done < <(
+    run_az webapp list-runtimes \
+      --os-type linux \
+      --query "[?starts_with(@, 'NODE|') || starts_with(@, 'node|') || starts_with(@, 'NODE:') || starts_with(@, 'node:')]" \
+      -o tsv 2>/dev/null || true
+  )
+
+  # Fallbacks for older/newer CLI and API versions.
+  add_unique_runtime_candidate "NODE|20-lts" RUNTIME_CANDIDATES
+  add_unique_runtime_candidate "node|20-lts" RUNTIME_CANDIDATES
+  add_unique_runtime_candidate "NODE:20-lts" RUNTIME_CANDIDATES
+  add_unique_runtime_candidate "node:20-lts" RUNTIME_CANDIDATES
+  add_unique_runtime_candidate "NODE|20LTS" RUNTIME_CANDIDATES
+  add_unique_runtime_candidate "node|20LTS" RUNTIME_CANDIDATES
+  add_unique_runtime_candidate "NODE:20LTS" RUNTIME_CANDIDATES
+  add_unique_runtime_candidate "node:20LTS" RUNTIME_CANDIDATES
+  add_unique_runtime_candidate "NODE|18-lts" RUNTIME_CANDIDATES
+  add_unique_runtime_candidate "node|18-lts" RUNTIME_CANDIDATES
+  add_unique_runtime_candidate "NODE:18-lts" RUNTIME_CANDIDATES
+  add_unique_runtime_candidate "node:18-lts" RUNTIME_CANDIDATES
 }
 
 build_appservice_region_candidates() {
@@ -227,13 +312,33 @@ if run_az webapp show --resource-group "$RESOURCE_GROUP" --name "$API_APP_NAME" 
     --output none
 else
   echo "Creating API app: ${API_APP_NAME}"
-  run_az webapp create \
-    --resource-group "$RESOURCE_GROUP" \
-    --plan "$APP_SERVICE_PLAN" \
-    --name "$API_APP_NAME" \
-    --runtime "node:20LTS" \
-    --https-only true \
-    --output none
+  build_runtime_candidates
+
+  WEBAPP_CREATED="false"
+  WEBAPP_LAST_ERROR_FILE="$(mktemp)"
+  for candidate_runtime in "${RUNTIME_CANDIDATES[@]}"; do
+    echo "Trying Linux runtime: ${candidate_runtime}"
+    if run_az webapp create \
+      --resource-group "$RESOURCE_GROUP" \
+      --plan "$APP_SERVICE_PLAN" \
+      --name "$API_APP_NAME" \
+      --runtime "$candidate_runtime" \
+      --https-only true \
+      --output none >"$WEBAPP_LAST_ERROR_FILE" 2>&1; then
+      API_RUNTIME="$candidate_runtime"
+      WEBAPP_CREATED="true"
+      echo "API app created with runtime: ${API_RUNTIME}"
+      break
+    fi
+  done
+
+  if [[ "$WEBAPP_CREATED" != "true" ]]; then
+    echo "Failed to create API app with available Node runtimes." >&2
+    cat "$WEBAPP_LAST_ERROR_FILE" >&2 || true
+    rm -f "$WEBAPP_LAST_ERROR_FILE"
+    exit 1
+  fi
+  rm -f "$WEBAPP_LAST_ERROR_FILE"
 fi
 
 if run_az staticwebapp show --resource-group "$RESOURCE_GROUP" --name "$STATIC_WEB_APP_NAME" >/dev/null 2>&1; then
@@ -324,6 +429,7 @@ GitHub workflow secrets:
   AZURE_API_PUBLISH_PROFILE=<xml from az webapp deployment list-publishing-profiles --xml>
   AZURE_STATIC_WEB_APPS_API_TOKEN=<token from az staticwebapp secrets list>
   VITE_API_URL=$API_URL
+  API_RUNTIME_USED=${API_RUNTIME:-auto}
 
 If you did not use --set-github-secrets, run:
   gh secret set AZURE_API_APP_NAME --body "$API_APP_NAME"

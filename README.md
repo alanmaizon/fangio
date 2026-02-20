@@ -244,6 +244,7 @@ This command:
 - creates App Service plan + API app
 - creates Static Web App
 - auto-retries alternative regions if your subscription blocks the default region
+- auto-tries compatible Linux Node runtimes if one runtime string is rejected
 - sets API app settings (`NODE_ENV`, `CORS_ORIGINS`)
 - writes required GitHub Actions secrets in your current repo
 
