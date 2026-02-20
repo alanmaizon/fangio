@@ -11,6 +11,8 @@ API_APP_NAME="fangio-api-$(date +%s)"
 STATIC_WEB_APP_NAME="fangio-web-$(date +%s)"
 SUBSCRIPTION=""
 SET_GITHUB_SECRETS="false"
+LOCATION_PROVIDED="false"
+STATIC_LOCATION_PROVIDED="false"
 
 usage() {
   cat <<'USAGE'
@@ -46,10 +48,12 @@ while [[ $# -gt 0 ]]; do
       ;;
     --location)
       LOCATION="$2"
+      LOCATION_PROVIDED="true"
       shift 2
       ;;
     --static-location)
       STATIC_LOCATION="$2"
+      STATIC_LOCATION_PROVIDED="true"
       shift 2
       ;;
     --plan-name)
@@ -101,6 +105,65 @@ run_az() {
   else
     az "$@"
   fi
+}
+
+add_unique_candidate() {
+  local value="$1"
+  shift
+  local -n target_array="$1"
+
+  if [[ -z "$value" ]]; then
+    return
+  fi
+
+  local existing
+  for existing in "${target_array[@]}"; do
+    if [[ "$existing" == "$value" ]]; then
+      return
+    fi
+  done
+
+  target_array+=("$value")
+}
+
+build_appservice_region_candidates() {
+  APP_SERVICE_REGION_CANDIDATES=()
+  add_unique_candidate "$LOCATION" APP_SERVICE_REGION_CANDIDATES
+
+  while IFS= read -r region; do
+    add_unique_candidate "$region" APP_SERVICE_REGION_CANDIDATES
+  done < <(
+    run_az appservice list-locations \
+      --sku "$APP_SERVICE_SKU" \
+      --linux-workers-enabled \
+      --query "[].name" \
+      -o tsv 2>/dev/null || true
+  )
+
+  # Common safe fallbacks for constrained subscriptions.
+  add_unique_candidate "eastus2" APP_SERVICE_REGION_CANDIDATES
+  add_unique_candidate "centralus" APP_SERVICE_REGION_CANDIDATES
+  add_unique_candidate "westus2" APP_SERVICE_REGION_CANDIDATES
+  add_unique_candidate "westus3" APP_SERVICE_REGION_CANDIDATES
+}
+
+build_static_region_candidates() {
+  STATIC_REGION_CANDIDATES=()
+  add_unique_candidate "$STATIC_LOCATION" STATIC_REGION_CANDIDATES
+  add_unique_candidate "$LOCATION" STATIC_REGION_CANDIDATES
+
+  # Common Static Web Apps regions.
+  add_unique_candidate "centralus" STATIC_REGION_CANDIDATES
+  add_unique_candidate "eastus2" STATIC_REGION_CANDIDATES
+  add_unique_candidate "westus2" STATIC_REGION_CANDIDATES
+  add_unique_candidate "westeurope" STATIC_REGION_CANDIDATES
+  add_unique_candidate "northeurope" STATIC_REGION_CANDIDATES
+
+  while IFS= read -r region; do
+    add_unique_candidate "$region" STATIC_REGION_CANDIDATES
+  done < <(
+    run_az account list-locations --query "[].name" -o tsv 2>/dev/null || true
+  )
 }
 
 require_cmd az
