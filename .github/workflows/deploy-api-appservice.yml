@@ -46,8 +46,26 @@ jobs:
 
       - name: Create deployment bundle
         run: |
+          set -euo pipefail
           rm -rf "${DEPLOY_DIR}"
           pnpm --filter @fangio/api --prod deploy "${DEPLOY_DIR}"
+
+          # App Service zip extraction does not preserve pnpm symlinks reliably.
+          # Materialize node_modules so runtime resolution works (ex: execa from @fangio/tools).
+          if [ -d "${DEPLOY_DIR}/node_modules" ]; then
+            LINK_COUNT="$(find "${DEPLOY_DIR}/node_modules" -type l | wc -l | tr -d ' ')"
+            if [ "${LINK_COUNT}" -gt 0 ]; then
+              rm -rf "${DEPLOY_DIR}/node_modules.materialized"
+              mkdir -p "${DEPLOY_DIR}/node_modules.materialized"
+              cp -aL "${DEPLOY_DIR}/node_modules/." "${DEPLOY_DIR}/node_modules.materialized/"
+              rm -rf "${DEPLOY_DIR}/node_modules"
+              mv "${DEPLOY_DIR}/node_modules.materialized" "${DEPLOY_DIR}/node_modules"
+            fi
+          fi
+
+          # Fail fast if a known transitive runtime dependency is missing.
+          test -f "${DEPLOY_DIR}/node_modules/execa/package.json"
+
           cd "${DEPLOY_DIR}"
           zip -qr ../../api-deploy.zip .
 
