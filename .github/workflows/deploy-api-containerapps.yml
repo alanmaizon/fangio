@@ -1,0 +1,70 @@
+name: Deploy API to Azure Container Apps
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/api/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.dockerignore'
+      - '.github/workflows/deploy-api-containerapps.yml'
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_REPOSITORY: fangio-api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Build and push image to ACR
+        shell: bash
+        run: |
+          set -euo pipefail
+          az config set extension.use_dynamic_install=yes_without_prompt
+          IMAGE_TAG="${GITHUB_SHA}"
+          az acr build \
+            --registry "${{ secrets.AZURE_CONTAINER_REGISTRY_NAME }}" \
+            --image "${IMAGE_REPOSITORY}:${IMAGE_TAG}" \
+            --file apps/api/Dockerfile \
+            .
+
+      - name: Update Container App revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          az config set extension.use_dynamic_install=yes_without_prompt
+
+          ACR_LOGIN_SERVER="${{ secrets.AZURE_CONTAINER_REGISTRY_LOGIN_SERVER }}"
+          if [ -z "${ACR_LOGIN_SERVER}" ]; then
+            ACR_LOGIN_SERVER="$(az acr show --name "${{ secrets.AZURE_CONTAINER_REGISTRY_NAME }}" --query loginServer -o tsv)"
+          fi
+
+          IMAGE_REF="${ACR_LOGIN_SERVER}/${IMAGE_REPOSITORY}:${GITHUB_SHA}"
+          az containerapp update \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ secrets.AZURE_API_CONTAINER_APP_NAME }}" \
+            --image "${IMAGE_REF}" \
+            --output none
+
+      - name: Print API URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          FQDN="$(az containerapp show --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --name "${{ secrets.AZURE_API_CONTAINER_APP_NAME }}" --query properties.configuration.ingress.fqdn -o tsv)"
+          echo "API URL: https://${FQDN}"

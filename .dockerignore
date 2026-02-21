@@ -1,0 +1,9 @@
+.git
+.github
+.output
+.pnpm-store
+node_modules
+apps/*/dist
+packages/*/dist
+**/*.log
+**/.DS_Store

@@ -9,7 +9,8 @@
     "lint": "pnpm --filter \"./packages/**\" lint && pnpm --filter \"./apps/**\" lint",
     "test": "pnpm --filter @fangio/schema build && pnpm --filter @fangio/tools build && pnpm --filter @fangio/planner build && pnpm --filter @fangio/api build && node --test --test-concurrency=1 packages/*/dist/**/*.test.js apps/api/dist/**/*.test.js scripts/**/*.test.mjs",
     "doctor:foundry": "node scripts/doctor-foundry.mjs",
-    "azure:setup": "bash scripts/setup-azure-student.sh"
+    "azure:setup": "bash scripts/setup-azure-student.sh",
+    "azure:setup:ca": "bash scripts/setup-azure-containerapps-student.sh"
   },
   "devDependencies": {
     "typescript": "^5.3.3",

@@ -222,117 +222,77 @@ http://localhost:5173
 
 ## Deploy on Azure for Students
 
-Fangio can be deployed with a simple split:
+Recommended split:
 
-- `apps/api` on Azure App Service
-- `apps/web` on Azure Static Web Apps
+- `apps/api` on Azure Container Apps (Docker image)
+- `apps/web` on Azure Static Web Apps (or Web App fallback)
 
 This repo includes deployment workflows:
 
-- `.github/workflows/deploy-api-appservice.yml`
+- `.github/workflows/deploy-api-containerapps.yml` (recommended API path)
+- `.github/workflows/deploy-api-appservice.yml` (legacy fallback)
 - `.github/workflows/deploy-web-static.yml`
 - `.github/workflows/deploy-web-appservice.yml` (fallback when Static Web Apps is blocked by subscription policy)
 
-### Fast setup (recommended)
+### Fast setup for API on Container Apps
+
+1. Get your deployed web URL (used for `CORS_ORIGINS`), for example:
+   - `https://fangio-web-123.azurewebsites.net`
+   - `https://<name>.azurestaticapps.net`
+2. Run:
 
 ```bash
-pnpm azure:setup -- --set-github-secrets
+pnpm azure:setup:ca -- \
+  --cors-origin https://<your-web-host> \
+  --set-github-secrets \
+  --create-github-credentials
 ```
 
 This command:
 
-- creates or reuses the Azure resource group
-- creates App Service plan + API app
-- creates Static Web App
-- auto-retries alternative regions if your subscription blocks the default region
-- auto-tries compatible Linux Node runtimes if one runtime string is rejected
-- falls back to Web UI on App Service when Static Web Apps is policy-blocked
-- sets API app settings (`NODE_ENV`, `CORS_ORIGINS`)
-- writes required GitHub Actions secrets in your current repo
+- creates or reuses resource group
+- creates ACR (Basic)
+- creates Container Apps environment
+- creates or reuses API Container App with external ingress
+- configures `NODE_ENV`, `FANGIO_DATA_DIR`, `CORS_ORIGINS`
+- assigns managed identity + `AcrPull` role
+- writes required GitHub Actions secrets
 
-If you prefer manual secret setup, run:
+### Required GitHub Secrets for Container Apps workflow
 
-```bash
-pnpm azure:setup
-```
+- `AZURE_CREDENTIALS` (service principal JSON used by `azure/login`)
+- `AZURE_RESOURCE_GROUP`
+- `AZURE_CONTAINER_REGISTRY_NAME`
+- `AZURE_CONTAINER_REGISTRY_LOGIN_SERVER`
+- `AZURE_API_CONTAINER_APP_NAME`
+- `VITE_API_URL`
 
-Useful overrides:
+### Deploy API (Container Apps)
 
-```bash
-pnpm azure:setup -- \
-  --resource-group fangio-rg \
-  --api-app-name fangio-api-demo \
-  --web-app-name fangio-web-demo \
-  --location eastus \
-  --static-location centralus
-```
+Push to `main` or run manually:
 
-Force App Service hosting for the web UI (skip Static Web Apps):
+- `.github/workflows/deploy-api-containerapps.yml`
 
-```bash
-pnpm azure:setup -- --set-github-secrets --web-hosting appservice
-```
+The workflow:
 
-### 1) Create Azure resources
+- builds image from `apps/api/Dockerfile`
+- pushes to ACR using `az acr build`
+- updates Container App to new image revision
 
-Create:
+### Deploy Web
 
-- one **App Service** (Linux, Node 20) for the API
-- one **Static Web App** for the web UI
+- Static Web Apps mode: run `.github/workflows/deploy-web-static.yml`
+- App Service web mode: run `.github/workflows/deploy-web-appservice.yml`
 
-### 2) Add GitHub repository secrets
+### Share for testing
 
-In GitHub -> Settings -> Secrets and variables -> Actions, add:
+Share your web URL with testers. The web app calls `VITE_API_URL`, and the API accepts only `CORS_ORIGINS`.
 
-- `AZURE_API_APP_NAME`: App Service name (example: `fangio-api`)
-- `AZURE_API_PUBLISH_PROFILE`: publish profile XML from App Service -> Overview -> Get publish profile
-- `VITE_API_URL`: public API URL (example: `https://fangio-api.azurewebsites.net`)
-
-For Static Web Apps mode, also add:
-
-- `AZURE_STATIC_WEB_APPS_API_TOKEN`: deployment token from Static Web App -> Manage deployment token
-
-For App Service web fallback mode, add instead:
-
-- `AZURE_WEB_APP_NAME`
-- `AZURE_WEB_PUBLISH_PROFILE`
-
-### 3) Configure API environment variables
-
-In App Service -> Environment variables, set:
-
-- `NODE_ENV=production`
-- `CORS_ORIGINS=https://<your-web-host>`
-- `GITHUB_TOKEN` or `LLM_API_KEY` (depending on your model provider)
-- optional `LLM_MODEL` and `LLM_BASE_URL`
-
-Do not hardcode `PORT`; App Service injects it automatically.
-
-### 4) Deploy
-
-Push to `main` or run each workflow manually from GitHub Actions.
-
-- Static Web Apps mode: run `deploy-web-static.yml`
-- App Service web mode: run `deploy-web-appservice.yml`
-
-### 5) Share for testing
-
-Share your web URL with testers (either `azurestaticapps.net` or `azurewebsites.net`).
-
-Flow for testers:
-
-- open the web URL
-- create and approve plans in UI
-- UI calls your API at `VITE_API_URL`
-- API allows requests only from `CORS_ORIGINS`
-
-Quick health check:
+Quick health check for Container Apps API:
 
 ```bash
-curl https://<your-api>.azurewebsites.net/health
+curl https://<your-api-fqdn>/health
 ```
-
-If that returns `{"status":"ok"}`, the runtime is reachable.
 
 ---
 
