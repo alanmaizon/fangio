@@ -46,9 +46,19 @@ function extractProfiles(xml) {
 function parseAttributes(profileXml) {
   const attrs = Object.create(null);
   for (const m of profileXml.matchAll(/([A-Za-z0-9:_-]+)=("([^"]*)"|'([^']*)')/g)) {
-    attrs[String(m[1]).toLowerCase()] = m[3] !== undefined ? m[3] : (m[4] || '');
+    const rawValue = m[3] !== undefined ? m[3] : (m[4] || '');
+    attrs[String(m[1]).toLowerCase()] = decodeXmlAttr(rawValue);
   }
   return attrs;
+}
+
+function decodeXmlAttr(value) {
+  return String(value || '')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
 }
 
 function chooseProfile(parsedProfiles) {
