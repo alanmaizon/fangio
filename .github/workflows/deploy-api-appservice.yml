@@ -63,8 +63,13 @@ jobs:
             fi
           fi
 
-          # Fail fast if a known transitive runtime dependency is missing.
-          test -f "${DEPLOY_DIR}/node_modules/execa/package.json"
+          # Fail fast only if execa is missing from the packaged dependency tree.
+          EXECA_PATH="$(find "${DEPLOY_DIR}/node_modules" -path '*/execa/package.json' | head -n 1 || true)"
+          if [ -z "${EXECA_PATH}" ]; then
+            echo "execa package not found in deployment bundle"
+            find "${DEPLOY_DIR}/node_modules" -maxdepth 3 -mindepth 1 -print | head -n 200
+            exit 1
+          fi
 
           cd "${DEPLOY_DIR}"
           zip -qr ../../api-deploy.zip .
