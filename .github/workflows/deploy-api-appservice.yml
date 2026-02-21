@@ -48,10 +48,46 @@ jobs:
         run: |
           rm -rf "${DEPLOY_DIR}"
           pnpm --filter @fangio/api --prod deploy "${DEPLOY_DIR}"
+          cd "${DEPLOY_DIR}"
+          zip -qr ../../api-deploy.zip .
 
-      - name: Deploy to Azure App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ secrets.AZURE_API_APP_NAME }}
-          publish-profile: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
-          package: ${{ env.DEPLOY_DIR }}
+      - name: Deploy to Azure App Service (Kudu ZipDeploy)
+        env:
+          PUBLISH_PROFILE_XML: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
+        run: |
+          node - <<'NODE' > kudu.env
+          const xml = process.env.PUBLISH_PROFILE_XML || '';
+          const entries = Array.from(
+            xml.matchAll(/<publishProfile\b[\s\S]*?(?:\/>|<\/publishProfile>)/gi)
+          ).map((m) => m[0]);
+          if (entries.length === 0) {
+            throw new Error('No publishProfile entries found in AZURE_API_PUBLISH_PROFILE.');
+          }
+          const parsed = entries.map((entry) => {
+            const attrs = Object.create(null);
+            for (const m of entry.matchAll(/([A-Za-z0-9:_-]+)=("([^"]*)"|'([^']*)')/g)) {
+              attrs[String(m[1]).toLowerCase()] = m[3] !== undefined ? m[3] : (m[4] || '');
+            }
+            return attrs;
+          });
+          const picked = parsed.find((p) => String(p.publishurl || '').toLowerCase().includes('scm'))
+            || parsed[0];
+          const publishUrl = String(picked.publishurl || '').replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+          const username = String(picked.username || '');
+          const password = String(picked.userpwd || picked.password || '');
+          if (!publishUrl || !username || !password) {
+            throw new Error('Missing publishUrl/username/password in publish profile.');
+          }
+          console.log(`KUDU_URL=https://${publishUrl}`);
+          console.log(`KUDU_USER=${username}`);
+          console.log(`KUDU_PASS=${password}`);
+          NODE
+
+          set -a
+          . ./kudu.env
+          set +a
+          curl --fail --show-error --silent \
+            -u "$KUDU_USER:$KUDU_PASS" \
+            -H "Content-Type: application/zip" \
+            --data-binary "@api-deploy.zip" \
+            "$KUDU_URL/api/zipdeploy"
