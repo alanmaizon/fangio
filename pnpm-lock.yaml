@@ -74,6 +74,19 @@ importers:
         specifier: ^5.4.21
         version: 5.4.21
 
+  packages/dsl:
+    dependencies:
+      '@fangio/schema':
+        specifier: workspace:*
+        version: link:../schema
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.6
+        version: 20.19.33
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
   packages/planner:
     dependencies:
       '@fangio/schema':
