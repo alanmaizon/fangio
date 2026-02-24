@@ -5,9 +5,9 @@
   "description": "Trusted Agent Runtime - Plan → Approve → Execute → Replay",
   "scripts": {
     "dev": "concurrently \"pnpm --filter @fangio/api dev\" \"pnpm --filter @fangio/web dev\"",
-    "build": "pnpm --filter @fangio/schema build && pnpm --filter @fangio/tools build && pnpm --filter @fangio/planner build && pnpm --filter @fangio/api build && pnpm --filter @fangio/web build",
+    "build": "pnpm --filter @fangio/schema build && pnpm --filter @fangio/dsl build && pnpm --filter @fangio/tools build && pnpm --filter @fangio/planner build && pnpm --filter @fangio/api build && pnpm --filter @fangio/web build",
     "lint": "pnpm --filter \"./packages/**\" lint && pnpm --filter \"./apps/**\" lint",
-    "test": "pnpm --filter @fangio/schema build && pnpm --filter @fangio/tools build && pnpm --filter @fangio/planner build && pnpm --filter @fangio/api build && node --test --test-concurrency=1 packages/*/dist/**/*.test.js apps/api/dist/**/*.test.js scripts/**/*.test.mjs",
+    "test": "pnpm --filter @fangio/schema build && pnpm --filter @fangio/dsl build && pnpm --filter @fangio/tools build && pnpm --filter @fangio/planner build && pnpm --filter @fangio/api build && node --test --test-concurrency=1 packages/*/dist/**/*.test.js apps/api/dist/**/*.test.js scripts/**/*.test.mjs",
     "doctor:foundry": "node scripts/doctor-foundry.mjs",
     "azure:setup": "bash scripts/setup-azure-student.sh",
     "azure:setup:ca": "bash scripts/setup-azure-containerapps-student.sh"
